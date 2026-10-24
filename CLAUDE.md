@@ -17,8 +17,14 @@
 - パネルUI: React（DOM）。新聞・側近報告・勅令入力・意図宣言・3段表示
 - LLM: Mistral API（`mistral-small-latest`）を **プロキシ経由** のみで呼ぶ（Cloudflare Workers）
 - セーブ: localStorage（JSON）。LLM会話履歴は保存しない
-- 主要コマンド（P0で `package.json` に整備して、ここを更新すること）:
-  - `pnpm dev` / `pnpm build` / `pnpm test` / `pnpm typecheck` / `pnpm lint`
+- 主要コマンド（P0で整備済み）:
+  - `pnpm dev`：Vite 開発サーバー
+  - `pnpm build`：型検査（`tsc -b`）＋本番ビルド
+  - `pnpm test`：Vitest（`src/**/*.test.ts(x)`）
+  - `pnpm typecheck`：`tsc -b --noEmit`
+  - `pnpm lint`：ESLint。`Math.random` 禁止、`src/domain` からの effect/phaser/react import 禁止を含む
+  - `pnpm sim`：P1 で追加予定（ヘッドレスシミュレーション）
+- バージョン固定：Effect は **3.x**（4.x は `Context.Tag` が廃止されているため）、TypeScript は **5.9.x**（typescript-eslint が 6.1 未満のみ対応）。理由は `docs/DECISIONS.md` D-56
 
 ## 3. ディレクトリ構成
 ```
