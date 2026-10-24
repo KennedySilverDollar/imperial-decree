@@ -148,6 +148,17 @@ export const LLM_MAX_RETRIES = 2;
 export const LLM_BACKOFF_BASE_MS = 500;
 export const LLM_TEMPERATURE = 0.2;
 
+// --- LLM プロキシ（src/proxy、SPEC §11.6） ---
+export const LLM_MODEL = "mistral-small-latest";
+/** プロキシから Mistral への待ち時間。クライアントの LLM_TIMEOUT_MS より短くして、先にプロキシが 504 を返す */
+export const PROXY_UPSTREAM_TIMEOUT_MS = 4500;
+export const PROXY_MAX_OUTPUT_TOKENS = 200;
+/** 本文の最大文字数（クライアント側の文字数制限より緩い安全網） */
+export const PROXY_MAX_TEXT_CHARS = 200;
+export const PROXY_MAX_BODY_BYTES = 4096;
+export const PROXY_RATE_LIMIT_PER_MINUTE = 20;
+export const PROXY_RATE_LIMIT_WINDOW_MS = 60_000;
+
 /** モック参謀の思案時間（P2：UI 確認用。P3 で本番 LLM に置き換える） */
 export const LLM_MOCK_DELAY_MS = 600;
 
