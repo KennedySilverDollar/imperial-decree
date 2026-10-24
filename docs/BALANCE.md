@@ -64,7 +64,7 @@ population = floor(max(0, population))
 | `RESIDENTS_PER_HOUSING_TILE` | 20 | A-08 の「住宅区画数×20」、SPEC §8.2 |
 | `INITIAL_HOUSING_UNITS` | 8 | 容量160。序盤は余裕、中盤（人口160超）から住宅の勅令が必要になる |
 | `HAPPINESS_GROWTH_THRESHOLD` | 50 | SPEC §7.1「50未満で人口流出」 |
-| `POPULATION_GROWTH_BASE` | 0.025 | 120→300 を約37年。30〜50ターンの尺 |
+| `POPULATION_GROWTH_BASE` | **0.03**（P1 で 0.025 から調整、§11） | 120→300 を約31年。30〜50ターンの尺 |
 | `POPULATION_GROWTH_PER_HAPPINESS` | 0.002 | 幸福度70で+4%/年 |
 | `POPULATION_OUTFLOW_PER_HAPPINESS` | 0.004 | 幸福度30で-8%/年。失うのは増えるより速い |
 | `OVERCROWD_OUTFLOW_RATE` | 0.15 | 超過分の15%が毎年流出。住宅放置の罰（A-08 の幸福ペナルティと併用） |
@@ -79,7 +79,7 @@ treasury  += taxRevenue - upkeep
 
 | 定数 | 値 | 根拠 |
 |------|----|------|
-| `TAX_PER_CAPITA` | 1.32 | 試算で決定。初期の年収約158。調整は主にこの値で行う（難度レバー） |
+| `TAX_PER_CAPITA` | **1.25**（P1 で 1.32 から調整、§11） | 初期の年収約150。調整は主にこの値で行う（難度レバー） |
 | `INFRA_UPKEEP_PER_POINT` | 2.0 | インフラ25で年50。作りすぎは財政を圧迫 |
 | `AIDE_SALARY` | 15 | 2人で年30 |
 | `OFFICE_UPKEEP` | 20 | 役所は建てた後も重い |
@@ -258,7 +258,7 @@ accuracy = clamp(ACCURACY_BASE + ability / ACCURACY_ABILITY_DIVISOR
 ## 8. 意図達成ボーナス（A-01）
 幸福度 `+INTENT_BONUS_HAPPINESS`（5）。ペナルティなし。判定は宣言値と実変化の単純比較（DECISIONS D-03）。
 
-## 9. 試算結果（2026-10-24、使い捨てスクリプト、各2000本）
+## 9. P0 試算結果（2026-10-24、使い捨てスクリプト、各2000本。P1 の実測は §11）
 
 | 方策 | 到達 | ゲームオーバー | 時間切れ | 平均到達ターン | GO内訳 |
 |------|------|----------------|----------|----------------|--------|
@@ -282,9 +282,9 @@ INITIAL_POPULATION=120  INITIAL_TREASURY=500  INITIAL_HAPPINESS=50  INITIAL_INFR
 INITIAL_HOUSING_UNITS=8  INITIAL_POLITICAL_CAPITAL=3  POLITICAL_CAPITAL_INCOME=1  POLITICAL_CAPITAL_MAX=5
 DECREE_POLITICAL_COST=1  APPOINT_POLITICAL_COST=1  DISMISS_POLITICAL_COST=0  DECREE_BASE_COST=10  MAX_TURNS=50
 DECREE_CHAR_LIMIT=40  TAG_CHAR_COST=3  MAX_TAGS=2  INTENT_BONUS_HAPPINESS=5
-RESIDENTS_PER_HOUSING_TILE=20  HAPPINESS_GROWTH_THRESHOLD=50  POPULATION_GROWTH_BASE=0.025  POPULATION_GROWTH_PER_HAPPINESS=0.002
+RESIDENTS_PER_HOUSING_TILE=20  HAPPINESS_GROWTH_THRESHOLD=50  POPULATION_GROWTH_BASE=0.03  POPULATION_GROWTH_PER_HAPPINESS=0.002
 POPULATION_OUTFLOW_PER_HAPPINESS=0.004  OVERCROWD_OUTFLOW_RATE=0.15
-TAX_PER_CAPITA=1.32  INFRA_UPKEEP_PER_POINT=2.0  AIDE_SALARY=15  OFFICE_UPKEEP=20  MARKET_TAX_BONUS=0.12  MARKET_MAX=3
+TAX_PER_CAPITA=1.25  INFRA_UPKEEP_PER_POINT=2.0  AIDE_SALARY=15  OFFICE_UPKEEP=20  MARKET_TAX_BONUS=0.12  MARKET_MAX=3
 HAPPINESS_EQUILIBRIUM_BASE=48  HAPPINESS_PER_INFRA=0.4  HAPPINESS_PENALTY_PER_CORRUPTION=0.2  HAPPINESS_REVERT_RATE=0.1
 CROWDING_HAPPINESS_PENALTY=3  NEGLECTED_CORRUPTION_THRESHOLD=50  NEGLECTED_CORRUPTION_PENALTY=3
 INFRA_DECAY_CHANCE=0.3  INFRA_DECAY_AMOUNT=1  CORRUPTION_DRIFT_PER_TURN=0.3
@@ -307,3 +307,36 @@ SUCCESS_POPULATION=300  SUCCESS_INFRASTRUCTURE=25
 HEURISTIC_NOISE=0.35  （sim 専用）
 LLM_TIMEOUT_MS=5000  LLM_MAX_RETRIES=2  LLM_BACKOFF_BASE_MS=500  LLM_TEMPERATURE=0.2
 ```
+
+---
+
+## 11. P1 実測（`pnpm sim`、各方策1000ゲーム、seed 1〜1000）
+
+`pnpm sim` は本番と同じ経路（DecreeParser のスキーマ検証 → AideInterpreter の歪み → RuleEngine → IntentEvaluator → エンディング判定）を通す。LLM はモックで、Bot が決めた DecreeIntent をそのまま「参謀の出力」として返す（テンプレートパーサーは通らない）。方策は §9 の定義どおり（ヒューリスティックの優先順位ルール＋`HEURISTIC_NOISE`=0.35 でランダム勅令に置換）。意図宣言・任命/解任は使わない。sim は seed 固定なので、同じ定数なら同じ結果になる。
+
+### 11.1 最終結果（採用値：`TAX_PER_CAPITA`=1.25、`POPULATION_GROWTH_BASE`=0.03）
+
+| 方策 | 到達 | ゲームオーバー | 時間切れ | GO内訳 | 平均ターン | 平均到達ターン |
+|------|------|----------------|----------|--------|------------|----------------|
+| **heuristic（主指標）** | **71.7%** | **22.0%** | 6.3% | 財政破綻 22.0% | 32.2 | 32.6 |
+| heuristic-clean（ノイズなし・参考） | 99.6% | 0.4% | 0.0% | 財政破綻 0.4% | 27.7 | 27.7 |
+| random（参考・合否に使わない） | 0.8% | 77.3% | 21.9% | 財政 68.0% / 幸福度 7.5% / 人口 1.8% | 31.5 | 41.5 |
+
+**A-02 判定：PASS**（到達 70〜90%、ゲームオーバー 20〜40%）。
+
+### 11.2 調整履歴（定数のみ変更。ロジックは変えていない）
+
+| # | 変更 | heuristic 到達 | heuristic GO | 時間切れ | 判定 | メモ |
+|---|------|----------------|--------------|----------|------|------|
+| 0 | P0 案のまま（`TAX_PER_CAPITA`=1.32、`POPULATION_GROWTH_BASE`=0.025） | 74.7% | 17.7% | 7.6% | FAIL | GO が下限割れ。P0 の Python 試算（73%/20%）より易しい。主因は骨抜きで「コストは減らない」（本実装）と、Python 版の簡略化の差 |
+| 1 | `TAX_PER_CAPITA` 1.32→1.30 | 73.6% | 19.0% | 7.4% | FAIL | |
+| 2 | `TAX_PER_CAPITA` →1.28 | 70.8% | 20.7% | 8.5% | PASS | 両指標とも下限ぎりぎり |
+| 3 | `TAX_PER_CAPITA` →1.26、`POPULATION_GROWTH_BASE` 0.025→0.03 | 73.1% | 20.2% | 6.7% | PASS | 成長を速めて時間切れを減らし、到達の余裕を作る |
+| 4 | `TAX_PER_CAPITA` →1.24（成長 0.03） | 69.7% | 22.8% | 7.5% | FAIL | 到達が下限割れ |
+| 5 | **`TAX_PER_CAPITA` →1.25（成長 0.03）** | **71.7%** | **22.0%** | 6.3% | **PASS** | **採用**。到達・GO とも下限から約1.5〜2ポイントの余裕 |
+
+### 11.3 所見
+- **到達率とゲームオーバー率のトレードオフが急**：`TAX_PER_CAPITA` を 0.01 動かすと到達・GO がそれぞれ約1.5ポイント動く。時間切れが約6〜8%あるため、「到達≧70%」と「GO≧20%」を同時に満たせる幅は狭い（DECISIONS N-03 のとおり）。
+- **ヒューリスティックの GO はほぼ全て財政破綻**。A-08 の幸福度・人口経路はランダム方策でのみ約9%発生する。人間のプレイで発生するかは P4 で確認する。
+- ノイズなしのヒューリスティックはほぼ全勝（99.6%）。難度の大半は「誤った勅令を出すこと」（ノイズ＝情報の不確かさの代理）から来ている。実プレイの難しさは新聞ノイズ・報告の隠蔽/欠落・LLM の解釈揺れに依存するため、人間の到達率（目標50〜70%）は P4 で実測するまで分からない。
+- 実行時間：3方策×1000ゲームで約40秒。
