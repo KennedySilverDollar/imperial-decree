@@ -12,7 +12,7 @@ import { LogService } from "../services/LogService";
 //  - 3段表示のめくり回数 → result.closed（flips）
 
 export type KpiEvent =
-  | { readonly event: "session.start"; readonly data: { readonly sessionId: string } }
+  | { readonly event: "session.start"; readonly data: { readonly sessionId: string; readonly llmMode: "proxy" | "mock" } }
   | {
       readonly event: "game.start";
       readonly data: { readonly sessionId: string; readonly gameId: string; readonly seed: number; readonly restartIndex: number; readonly resumed: boolean };

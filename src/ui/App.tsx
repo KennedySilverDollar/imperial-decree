@@ -13,7 +13,7 @@ import { EndingScreen } from "./panels/EndingScreen";
 import { MapPanel } from "./panels/MapPanel";
 import { NewspaperPanel } from "./panels/NewspaperPanel";
 import { ResultStack } from "./panels/ResultStack";
-import { freshId, gameApi, type Result } from "./runtime";
+import { freshId, gameApi, llmMode, type Result } from "./runtime";
 import { validationMessage } from "./validation";
 
 // 画面全体（SPEC §12.2）。ゲームの進行は TurnMachine（runtime.gameApi）に任せ、ここは表示と計測だけ。
@@ -51,7 +51,7 @@ export function App() {
 
   // 起動：セーブがあれば続きから、なければ新しく
   useEffect(() => {
-    gameApi.log({ event: "session.start", data: { sessionId: SESSION_ID } });
+    gameApi.log({ event: "session.start", data: { sessionId: SESSION_ID, llmMode } });
     void gameApi.load().then(async (saved) => {
       if (saved !== null && saved.ending === null) begin(saved, true);
       else begin(await gameApi.start(), false);
