@@ -1,0 +1,872 @@
+/* 「机の上の書類と、広げた地図」（SPEC §12）
+   配色は SPEC §12.3。彩度は低く、朱色だけがアクセント。テクスチャは CSS のみで作る（画像素材なし）。 */
+
+:root {
+  --desk: #3b2a1a;
+  --paper: #e8dcc0;
+  --ink: #2b1d0e;
+  --vermilion: #a63a2e;
+  --land: #7a8b5a;
+  --water: #5a7a8b;
+  --warning: #7a2a2a;
+  --ink-soft: rgb(43 29 14 / 62%);
+  --ink-faint: rgb(43 29 14 / 18%);
+  --pencil: #5b5548;
+  --serif: "Noto Serif JP", serif;
+  --sans: "Noto Sans JP", sans-serif;
+  /* 演出時間は constants.ts から main.tsx で上書きされる */
+  --stamp-ms: 1000ms;
+  --fade-ms: 400ms;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  margin: 0;
+  min-height: 100%;
+}
+
+body {
+  background: var(--desk);
+  color: var(--ink);
+  font-family: var(--serif);
+  font-size: 15px;
+  line-height: 1.7;
+}
+
+/* --- 机（木目） --- */
+.desk {
+  min-height: 100vh;
+  padding: 16px 24px 32px;
+  background-color: var(--desk);
+  background-image:
+    repeating-linear-gradient(92deg, rgb(0 0 0 / 7%) 0 2px, transparent 2px 11px),
+    repeating-linear-gradient(88deg, rgb(255 230 190 / 3%) 0 1px, transparent 1px 23px),
+    radial-gradient(ellipse at 30% 0%, rgb(255 220 170 / 8%), transparent 60%);
+}
+
+.desk.loading {
+  display: grid;
+  place-items: center;
+  color: var(--paper);
+}
+
+.desk-header {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  color: var(--paper);
+  margin-bottom: 14px;
+  font-family: var(--sans);
+  font-size: 13px;
+}
+
+.title {
+  margin: 0;
+  font-family: var(--serif);
+  font-weight: 700;
+  font-size: 22px;
+  letter-spacing: 0.2em;
+}
+
+.year {
+  font-family: var(--serif);
+  font-size: 18px;
+}
+
+.capital {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.pips {
+  display: inline-flex;
+  gap: 4px;
+}
+
+.pip {
+  width: 11px;
+  height: 11px;
+  border-radius: 50%;
+  border: 1.5px solid var(--paper);
+  opacity: 0.6;
+}
+
+.pip.filled {
+  background: var(--paper);
+  opacity: 1;
+}
+
+.spacer {
+  flex: 1;
+}
+
+.confirm {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+/* --- 机の上の配置（SPEC §12.2）：左に新聞と側近、右に地図と勅令。列ごとに高さを決め、空白を作らない --- */
+.desk-grid {
+  display: grid;
+  grid-template-columns: minmax(340px, 1fr) minmax(420px, auto);
+  gap: 22px;
+  align-items: start;
+}
+
+.desk-column {
+  display: flex;
+  flex-direction: column;
+  gap: 22px;
+  min-width: 0;
+}
+
+.panel-title {
+  margin: 0 0 8px;
+  font-family: var(--sans);
+  font-size: 12px;
+  font-weight: 400;
+  letter-spacing: 0.3em;
+  color: rgb(232 220 192 / 75%);
+}
+
+.panel.paper > .panel-title,
+.paper .panel-title {
+  color: var(--ink-soft);
+}
+
+.panel-note {
+  margin: 4px 0 0;
+  font-family: var(--sans);
+  font-size: 12px;
+  color: var(--ink-soft);
+}
+
+.map-panel .panel-note,
+.aide-panel > .panel-note,
+.appoint > .panel-note {
+  color: rgb(232 220 192 / 70%);
+}
+
+.warning-text {
+  margin: 6px 0 0;
+  font-family: var(--sans);
+  font-size: 13px;
+  color: var(--warning);
+}
+
+.desk-column > .warning-text,
+.aide-panel > .warning-text {
+  color: #e2b6a8;
+}
+
+/* --- 紙 --- */
+.paper {
+  position: relative;
+  background-color: var(--paper);
+  background-image:
+    radial-gradient(ellipse at 15% 8%, rgb(255 255 255 / 28%), transparent 55%),
+    radial-gradient(ellipse at 85% 95%, rgb(120 90 50 / 16%), transparent 55%),
+    repeating-linear-gradient(0deg, rgb(43 29 14 / 2.5%) 0 1px, transparent 1px 3px);
+  box-shadow:
+    0 1px 0 rgb(255 255 255 / 30%) inset,
+    0 2px 3px rgb(0 0 0 / 25%),
+    0 10px 24px rgb(0 0 0 / 30%);
+  border-radius: 2px;
+}
+
+.fade-in {
+  animation: paper-fade var(--fade-ms) ease-out;
+}
+
+@keyframes paper-fade {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+/* --- 新聞 --- */
+.newspaper {
+  padding: 18px 22px 16px;
+  transform: rotate(-0.6deg);
+}
+
+.newspaper-masthead {
+  font-weight: 700;
+  font-size: 13px;
+  letter-spacing: 0.25em;
+  border-bottom: 3px double var(--ink);
+  padding-bottom: 4px;
+}
+
+.newspaper-headline {
+  margin: 10px 0 8px;
+  font-size: 26px;
+  font-weight: 700;
+  line-height: 1.35;
+}
+
+.newspaper-body {
+  font-weight: 300;
+  column-count: 2;
+  column-gap: 20px;
+  column-rule: 1px solid var(--ink-faint);
+}
+
+.newspaper-body p {
+  margin: 0 0 6px;
+  break-inside: avoid;
+}
+
+.newspaper-note {
+  margin: 10px 0 0;
+  font-family: var(--sans);
+  font-size: 11px;
+  color: var(--ink-soft);
+}
+
+/* --- 地図 --- */
+.map-canvas {
+  width: fit-content;
+  line-height: 0;
+  box-shadow: 0 10px 24px rgb(0 0 0 / 35%);
+  transform: rotate(0.4deg);
+}
+
+.map-canvas canvas {
+  display: block;
+}
+
+.map-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 14px;
+  margin: 10px 0 0;
+  padding: 0;
+  list-style: none;
+  font-family: var(--sans);
+  font-size: 12px;
+  color: var(--paper);
+}
+
+.legend-swatch {
+  display: inline-block;
+  width: 12px;
+  height: 12px;
+  margin-right: 5px;
+  vertical-align: -1px;
+  border: 1px solid rgb(232 220 192 / 50%);
+}
+
+.legend-office {
+  background: var(--vermilion);
+}
+.legend-road {
+  background: #9c8460;
+}
+.legend-residential {
+  background: var(--paper);
+}
+.legend-market {
+  background: repeating-linear-gradient(90deg, var(--ink) 0 2px, var(--paper) 2px 5px);
+}
+.legend-empty {
+  background: var(--land);
+}
+.legend-cracked {
+  background: linear-gradient(135deg, transparent 45%, var(--warning) 45% 58%, transparent 58%), var(--paper);
+}
+
+/* --- 側近 --- */
+.aide-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 14px;
+}
+
+.letter {
+  padding: 14px 16px 12px;
+}
+
+.letter:nth-child(odd) {
+  transform: rotate(0.5deg);
+}
+.letter:nth-child(even) {
+  transform: rotate(-0.4deg);
+}
+
+.aide-name {
+  font-weight: 700;
+  font-size: 17px;
+}
+
+.aide-intro {
+  font-size: 13px;
+  color: var(--ink-soft);
+}
+
+.aide-meta {
+  margin-top: 2px;
+  font-family: var(--sans);
+  font-size: 12px;
+}
+
+.aide-stats {
+  display: flex;
+  gap: 12px;
+  margin: 6px 0 8px;
+  font-family: var(--sans);
+  font-size: 12px;
+}
+
+.aide-stats div {
+  display: flex;
+  gap: 3px;
+}
+
+.aide-stats dt {
+  color: var(--ink-soft);
+}
+
+.aide-stats dd {
+  margin: 0;
+  font-weight: 700;
+}
+
+.report-letter {
+  border-top: 1px solid var(--ink-faint);
+  padding-top: 8px;
+}
+
+.report-letter p {
+  margin: 0 0 2px;
+}
+
+.report-header {
+  font-size: 13px;
+  color: var(--ink-soft);
+  margin-bottom: 4px;
+}
+
+.report-empty {
+  margin: 0;
+  font-size: 13px;
+  color: var(--ink-soft);
+  border-top: 1px solid var(--ink-faint);
+  padding-top: 8px;
+}
+
+.aide-actions {
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+  margin-top: 8px;
+}
+
+.appoint {
+  margin-top: 16px;
+}
+
+.appoint-heading {
+  margin: 0 0 6px;
+  font-size: 14px;
+  color: var(--paper);
+}
+
+.candidate {
+  opacity: 0.93;
+}
+
+.candidate .button {
+  margin-top: 4px;
+}
+
+/* --- 勅令（巻物） --- */
+.scroll {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 12px;
+  padding: 22px 22px 18px 26px;
+  border-top: 10px solid #c9b48c;
+  border-bottom: 10px solid #c9b48c;
+}
+
+.decree-text {
+  width: 100%;
+  resize: none;
+  border: none;
+  border-bottom: 1px solid var(--ink-faint);
+  background: transparent;
+  color: var(--ink);
+  font-family: var(--serif);
+  font-size: 22px;
+  line-height: 1.6;
+  padding: 2px 0;
+  outline: none;
+}
+
+.decree-text:focus {
+  border-bottom-color: var(--ink-soft);
+}
+
+.decree-text::placeholder {
+  color: rgb(43 29 14 / 30%);
+}
+
+.remaining {
+  font-family: var(--sans);
+  font-size: 13px;
+  text-align: right;
+  margin-top: 2px;
+}
+
+.remaining.over {
+  color: var(--vermilion);
+  font-weight: 700;
+}
+
+.tags {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+  margin-top: 8px;
+  font-family: var(--sans);
+  font-size: 13px;
+}
+
+.tags label {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+select,
+.intent-value {
+  font-family: var(--sans);
+  font-size: 13px;
+  color: var(--ink);
+  background: rgb(255 255 255 / 25%);
+  border: 1px solid var(--ink-faint);
+  border-radius: 2px;
+  padding: 2px 4px;
+}
+
+/* 余白の書き添え：鉛筆のメモ風 */
+.intent-margin {
+  margin-top: 14px;
+  padding: 6px 10px 4px;
+  border-left: 2px solid rgb(91 85 72 / 35%);
+  color: var(--pencil);
+  font-style: italic;
+  transform: rotate(-0.8deg);
+}
+
+.intent-label {
+  display: block;
+  font-family: var(--sans);
+  font-size: 11px;
+  font-style: normal;
+}
+
+.intent-line {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+
+.intent-margin select,
+.intent-value {
+  color: var(--pencil);
+  font-style: italic;
+  background: transparent;
+  border: none;
+  border-bottom: 1px dashed rgb(91 85 72 / 50%);
+}
+
+.intent-value {
+  width: 4.5em;
+}
+
+/* 判子（SPEC §12.5：判子を押すとドンと押される。CSS transition 約1秒） */
+.stamp-area {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 4px;
+  min-width: 96px;
+}
+
+.seal-button {
+  width: 72px;
+  height: 72px;
+  border-radius: 50%;
+  border: none;
+  background: radial-gradient(circle at 35% 30%, #c0574a, var(--vermilion) 60%, #7e2a21);
+  color: var(--paper);
+  font-family: var(--serif);
+  font-weight: 700;
+  font-size: 30px;
+  cursor: pointer;
+  box-shadow:
+    0 4px 0 #5e1f18,
+    0 8px 14px rgb(0 0 0 / 35%);
+  transition:
+    transform 120ms,
+    box-shadow 120ms,
+    filter 120ms;
+}
+
+.seal-button:hover:not(:disabled) {
+  transform: translateY(-2px);
+}
+
+.seal-button:active:not(:disabled) {
+  transform: translateY(3px);
+  box-shadow:
+    0 1px 0 #5e1f18,
+    0 3px 6px rgb(0 0 0 / 35%);
+}
+
+.seal-button:disabled {
+  filter: grayscale(0.7) brightness(0.85);
+  cursor: not-allowed;
+}
+
+.stamp-caption {
+  font-family: var(--sans);
+  font-size: 11px;
+  color: var(--ink-soft);
+}
+
+.seal-imprint {
+  position: absolute;
+  right: 120px;
+  bottom: 6px;
+  width: 96px;
+  height: 96px;
+  display: grid;
+  place-items: center;
+  border: 5px solid var(--vermilion);
+  border-radius: 10px;
+  color: var(--vermilion);
+  font-family: var(--serif);
+  font-weight: 700;
+  font-size: 54px;
+  opacity: 0;
+  transform: scale(1.9) rotate(-18deg);
+  pointer-events: none;
+  mix-blend-mode: multiply;
+  transition:
+    transform var(--stamp-ms) cubic-bezier(0.2, 1.5, 0.35, 1),
+    opacity calc(var(--stamp-ms) * 0.35) ease-in;
+}
+
+.is-stamped .seal-imprint,
+.seal-imprint.visible {
+  opacity: 0.85;
+  transform: scale(1) rotate(-8deg);
+}
+
+.is-stamped .scroll-body {
+  opacity: 0.8;
+  transition: opacity var(--stamp-ms);
+}
+
+.decree-status {
+  min-height: 28px;
+}
+
+.decree-status .panel-note {
+  color: rgb(232 220 192 / 75%);
+}
+
+.decree-status .warning-text {
+  color: #e2b6a8;
+}
+
+.thinking {
+  margin: 6px 0 0;
+  font-family: var(--sans);
+  font-size: 13px;
+  color: var(--paper);
+  animation: breathe 1.4s ease-in-out infinite;
+}
+
+@keyframes breathe {
+  50% {
+    opacity: 0.45;
+  }
+}
+
+/* --- ボタン --- */
+.button {
+  font-family: var(--sans);
+  font-size: 13px;
+  padding: 5px 12px;
+  border-radius: 2px;
+  border: 1px solid var(--ink-soft);
+  background: rgb(255 255 255 / 18%);
+  color: var(--ink);
+  cursor: pointer;
+}
+
+.button:hover:not(:disabled) {
+  background: rgb(255 255 255 / 35%);
+}
+
+.button:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.button.primary {
+  background: var(--vermilion);
+  border-color: var(--vermilion);
+  color: var(--paper);
+}
+
+.button.danger {
+  border-color: var(--warning);
+  color: var(--warning);
+}
+
+.button.subtle {
+  border-color: var(--ink-faint);
+}
+
+.button.on-wood {
+  color: var(--paper);
+  border-color: rgb(232 220 192 / 35%);
+  background: transparent;
+}
+
+.confirm .button {
+  color: var(--paper);
+  border-color: rgb(232 220 192 / 50%);
+  background: transparent;
+}
+
+.confirm .button.danger {
+  border-color: #e2b6a8;
+  color: #e2b6a8;
+}
+
+/* --- 重なった書類（3段表示＋意図比較、SPEC §12.6） --- */
+.overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 20;
+  display: grid;
+  place-items: center;
+  background: rgb(20 13 6 / 62%);
+  padding: 24px;
+}
+
+.result-stack {
+  width: min(560px, 100%);
+}
+
+.result-heading {
+  margin: 0 0 14px;
+  color: var(--paper);
+  font-size: 18px;
+  letter-spacing: 0.15em;
+}
+
+.sheets {
+  position: relative;
+  height: 400px;
+}
+
+.sheet {
+  position: absolute;
+  inset: 0 36px 36px 0;
+  padding: 20px 24px;
+  overflow: auto;
+  transform: translate(calc(var(--depth) * 12px), calc(var(--depth) * 12px)) rotate(calc(var(--depth) * 0.7deg));
+  transition:
+    transform 450ms ease,
+    opacity 450ms ease;
+}
+
+.sheet-under {
+  cursor: pointer;
+}
+
+.sheet-under .sheet-body {
+  visibility: hidden;
+}
+
+.sheet-flipped {
+  transform: translate(-70%, -6%) rotate(-12deg);
+  opacity: 0;
+  pointer-events: none;
+}
+
+.sheet-title {
+  margin: 0 0 10px;
+  font-size: 15px;
+  letter-spacing: 0.12em;
+  border-bottom: 1px solid var(--ink-faint);
+  padding-bottom: 6px;
+}
+
+.sheet-body p {
+  margin: 0 0 6px;
+}
+
+.decree-quote {
+  font-size: 20px;
+}
+
+.note-strong {
+  font-weight: 700;
+}
+
+/* 朱色の訂正線 */
+.correction {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+}
+
+.correction-label {
+  font-family: var(--sans);
+  font-size: 12px;
+  color: var(--ink-soft);
+  min-width: 2.5em;
+}
+
+.struck {
+  color: var(--ink-soft);
+  text-decoration: line-through;
+  text-decoration-color: var(--vermilion);
+  text-decoration-thickness: 2px;
+}
+
+.amended {
+  color: var(--vermilion);
+  text-decoration: none;
+  font-weight: 700;
+}
+
+.delta-table {
+  border-collapse: collapse;
+  font-size: 15px;
+}
+
+.delta-table th {
+  text-align: left;
+  font-weight: 400;
+  padding: 2px 24px 2px 0;
+}
+
+.delta-table td {
+  text-align: right;
+  font-family: var(--sans);
+  font-variant-numeric: tabular-nums;
+}
+
+.delta-table tr.flat {
+  color: var(--ink-soft);
+}
+
+/* 余白のメモ（鉛筆） */
+.memo {
+  background-image: repeating-linear-gradient(0deg, transparent 0 27px, rgb(90 122 139 / 22%) 27px 28px);
+  background-color: #efe6cf;
+}
+
+.pencil {
+  color: var(--pencil);
+  font-style: italic;
+}
+
+.sheet-controls {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 8px;
+}
+
+.sheet-controls .button:not(.primary) {
+  color: var(--paper);
+  border-color: rgb(232 220 192 / 50%);
+  background: transparent;
+}
+
+.sheet-count {
+  font-family: var(--sans);
+  font-size: 12px;
+  color: var(--paper);
+  min-width: 3em;
+  text-align: center;
+}
+
+.sheet-controls .primary {
+  margin-left: auto;
+}
+
+/* --- エンディング --- */
+.ending {
+  width: min(520px, 100%);
+  padding: 34px 38px 30px;
+  text-align: center;
+}
+
+.ending-kicker {
+  margin: 0;
+  font-family: var(--sans);
+  font-size: 12px;
+  letter-spacing: 0.4em;
+  color: var(--ink-soft);
+}
+
+.ending-headline {
+  margin: 10px 0 12px;
+  text-wrap: balance;
+  font-size: 30px;
+  line-height: 1.35;
+}
+
+.ending-gameover .ending-headline {
+  color: var(--warning);
+}
+
+.ending-words {
+  margin: 0 0 8px;
+  text-wrap: pretty;
+}
+
+.ending-turns {
+  font-family: var(--sans);
+  font-size: 13px;
+  color: var(--ink-soft);
+}
+
+.ending .seal-imprint {
+  position: static;
+  margin: 16px auto 18px;
+}
+
+/* --- 画面が狭いとき --- */
+@media (max-width: 1100px) {
+  .desk-grid {
+    grid-template-columns: 1fr;
+  }
+}

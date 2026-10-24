@@ -8,6 +8,12 @@ importers:
 
   .:
     dependencies:
+      '@fontsource/noto-sans-jp':
+        specifier: ^5.3.1
+        version: 5.3.1
+      '@fontsource/noto-serif-jp':
+        specifier: ^5.3.1
+        version: 5.3.1
       effect:
         specifier: ~3.22.4
         version: 3.22.4
@@ -260,6 +266,12 @@ packages:
   '@eslint/plugin-kit@0.7.3':
     resolution: {integrity: sha512-IkO+/KEUvwbVpiURZg+P7zF74z5Jxe0UgJxVni+RtoHQ6IZieXaO02kmadomap/q+l6bc/jdPGGqTjhuZnuz1Q==}
     engines: {node: ^20.19.0 || ^22.13.0 || >=24}
+
+  '@fontsource/noto-sans-jp@5.3.1':
+    resolution: {integrity: sha512-9NNBB/M9PextLYVXGSfIaLZsPnrt5UDw8g2B6T0M775H2yb/oekApSjuS1XKOP7FPcMMEnTavR5rJGDM66qKtA==}
+
+  '@fontsource/noto-serif-jp@5.3.1':
+    resolution: {integrity: sha512-ewMVFXmG1Ip5u1Po1E1M3qqm8hsFqja0/26vkoaNylPXW9pnmEcBREqXxp+Fs03wpmhICE6qyYBN2bbfNtsR9Q==}
 
   '@humanfs/core@0.19.2':
     resolution: {integrity: sha512-UhXNm+CFMWcbChXywFwkmhqjs3PRCmcSa/hfBgLIb7oQ5HNb1wS0icWsGtSAUNgefHeI+eBrA8I1fxmbHsGdvA==}
@@ -1184,6 +1196,10 @@ snapshots:
     dependencies:
       '@eslint/core': 1.2.1
       levn: 0.4.1
+
+  '@fontsource/noto-sans-jp@5.3.1': {}
+
+  '@fontsource/noto-serif-jp@5.3.1': {}
 
   '@humanfs/core@0.19.2':
     dependencies:
