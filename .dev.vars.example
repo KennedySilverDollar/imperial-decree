@@ -1,0 +1,10 @@
+# wrangler dev 用（このファイルを .dev.vars にコピーして値を入れる。.dev.vars は git 管理外）
+MISTRAL_API_KEY=
+# フロントの VITE_LLM_PROXY_TOKEN と同じ値にする（例: openssl rand -hex 24 で作る）
+PROXY_TOKEN=
+ENVIRONMENT=development
+ALLOWED_ORIGINS=http://localhost:5173,http://localhost:4173
+# 障害の模擬（development のときだけ有効）：空 / timeout / invalid_json / schema_violation / upstream_error
+FAULT_MODE=
+# 既定は https://api.mistral.ai 。ローカルの偽 Mistral（scripts/fake-mistral.mjs）で試すときに変える
+# MISTRAL_BASE_URL=http://127.0.0.1:8788
