@@ -11,21 +11,22 @@
 3. 仕様を変える提案は `docs/DECISIONS.md` に「仕様変更提案」として分けて書く。勝手に変更しない。
 
 ## 2. 技術スタック（既定値）
-- TypeScript（strict）、pnpm、Vite、Vitest
+- TypeScript（strict）、npm、Vite、Vitest
 - ゲームロジック: Effect-TS（`Context.Tag`によるサービス、`Effect.gen`）。スキーマは Effect Schema
 - 描画: Phaser（10×10グリッドの地図のみ）
 - パネルUI: React（DOM）。新聞・側近報告・勅令入力・意図宣言・3段表示
 - LLM: Mistral API（`mistral-small-latest`）を **プロキシ経由** のみで呼ぶ（Cloudflare Workers）
 - セーブ: localStorage（JSON）。LLM会話履歴は保存しない
 - 主要コマンド（P0で整備済み）:
-  - `pnpm dev`：Vite 開発サーバー
-  - `pnpm build`：型検査（`tsc -b`）＋本番ビルド
-  - `pnpm preview`：ビルド結果を配信（`--port 4173` で `scripts/screenshots.cjs` の既定 URL）
+  - `npm run dev`：Vite 開発サーバー
+  - `npm run build`：型検査（`tsc -b`）＋本番ビルド
+  - `npm run preview`：ビルド結果を配信（`npm run preview -- --port 4173` で `scripts/screenshots.cjs` の既定 URL）
   - `node scripts/screenshots.cjs [URL]`：ブラウザで1ゲーム通しで遊び、`docs/screenshots/` を撮り直す（環境の Playwright を使用）
-  - `pnpm test`：Vitest（`src/**/*.test.ts(x)`）
-  - `pnpm typecheck`：`tsc -b --noEmit`
-  - `pnpm lint`：ESLint。`Math.random` 禁止、`src/domain` からの effect/phaser/react import 禁止を含む
-  - `pnpm sim [ゲーム数]`：ヘッドレスシミュレーション（既定1000ゲーム×3方策）。A-02 の合否を PASS/FAIL で出力。結果は `docs/BALANCE.md` §11
+  - `npm test`：Vitest（`src/**/*.test.ts(x)`）
+  - `npm run typecheck`：`tsc -b --noEmit`
+  - `npm run lint`：ESLint。`Math.random` 禁止、`src/domain` からの effect/phaser/react import 禁止を含む
+  - `npm run sim -- [ゲーム数]`：ヘッドレスシミュレーション（既定1000ゲーム×3方策）。A-02 の合否を PASS/FAIL で出力。結果は `docs/BALANCE.md` §11
+- パッケージ管理は **npm に統一**（`package-lock.json` をコミットする。pnpm / yarn は使わない。依存の追加は `npm install <pkg>`、CI やクリーン環境では `npm ci`）
 - バージョン固定（AMENDMENT A-10）：Effect `~3.22.4`、TypeScript `5.9.2`（完全固定）、Phaser `~4.2.1`。Effect 4.x は `Context.Tag` が廃止されているため使わない。理由は `docs/DECISIONS.md` D-56
 
 ## 3. ディレクトリ構成
@@ -88,7 +89,7 @@ SPECの誤記（`###汚職`、`6計画`、`.1 入力仕様`の章番号など）
 ## 7. テスト方針
 - `engine/` と `domain/` は単体テスト必須。特に: 文字数検証、`accuracy`式、各歪み、エンディング判定と優先順位、意図判定、地図の自動導出、seed再現性。
 - LLMは必ずモック。フォールバック経路（タイムアウト/不正JSON/スキーマ違反）もテストする。
-- ゲームを1本通すヘッドレスシミュレーション（ランダム勅令）で、到達率・ゲームオーバー率を出せるスクリプトを用意（`pnpm sim`）。判定は **ヒューリスティック方策の到達率70〜90%（主指標）、ゲームオーバー率20〜40%**（A-02）。ランダム勅令の結果は参考値として記録し合否に使わない。方策の定義は `docs/BALANCE.md` §9。人間の初見到達率50〜70%はP4で実測。
+- ゲームを1本通すヘッドレスシミュレーション（ランダム勅令）で、到達率・ゲームオーバー率を出せるスクリプトを用意（`npm run sim`）。判定は **ヒューリスティック方策の到達率70〜90%（主指標）、ゲームオーバー率20〜40%**（A-02）。ランダム勅令の結果は参考値として記録し合否に使わない。方策の定義は `docs/BALANCE.md` §9。人間の初見到達率50〜70%はP4で実測。
 
 ## 8. UI・アセット
 - コンセプト「机の上の書類と、広げた地図」。配色とフォントは SPEC 12.3 / 12.4 に従う（純色禁止、朱色のみアクセント）。

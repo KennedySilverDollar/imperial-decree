@@ -1,5 +1,5 @@
 // ブラウザで1ゲームを最後まで遊び、主要パネルのスクリーンショットを docs/screenshots/ に保存する。
-// 使い方: pnpm build && pnpm preview --port 4173 を起動した状態で  node scripts/screenshots.cjs [URL]
+// 使い方: npm run build && npm run preview -- --port 4173 を起動した状態で  node scripts/screenshots.cjs [URL]
 // （Playwright は環境にあるものを使う。プロジェクトの依存には入れていない）
 
 const { chromium } = require("playwright");

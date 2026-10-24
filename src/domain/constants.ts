@@ -164,7 +164,7 @@ export const PAPER_FADE_MS = 400;
 export const SAVE_SCHEMA_VERSION = 1;
 export const SAVE_STORAGE_KEY = "imperial-decree/save";
 
-// --- シミュレーション（pnpm sim 専用） ---
+// --- シミュレーション（npm run sim 専用） ---
 export const SIM_GAMES = 1000;
 export const HEURISTIC_NOISE = 0.35;
 export const SIM_RANDOM_MAGNITUDE_MIN = 10;

@@ -8,7 +8,7 @@
 
 - 定数名は `src/domain/constants.ts` にそのまま置く想定（UPPER_SNAKE_CASE）。式の下の「根拠」は1行。
 - 乱数はすべて `Rng` サービス経由。`rand()` は `[0,1)`、`randRange(a,b)` は `[a,b)` の一様乱数。
-- 試算は使い捨ての Python スクリプト（リポジトリ外）によるもの。正式な検証は P1 の `pnpm sim` で取り直す（§9）。
+- 試算は使い捨ての Python スクリプト（リポジトリ外）によるもの。正式な検証は P1 の `npm run sim` で取り直す（§9）。
 
 ---
 
@@ -266,7 +266,7 @@ accuracy = clamp(ACCURACY_BASE + ability / ACCURACY_ABILITY_DIVISOR
 | ヒューリスティック（ノイズなし・参考） | 99% | 0% | 0% | 28.8 | — |
 | ランダム勅令（参考・合否に使わない） | 2% | 75% | 23% | 39.5 | 財政64%・幸福度8%・人口2% |
 
-**ヒューリスティック方策の定義**（P1 の `pnpm sim` で同じものを実装する）：真の状態を見て次の優先順位で決め、**各ターン `HEURISTIC_NOISE`（0.35）の確率でランダム勅令に置き換える**（情報の不確かさ・誤読の代理）。
+**ヒューリスティック方策の定義**（P1 の `npm run sim` で同じものを実装する）：真の状態を見て次の優先順位で決め、**各ターン `HEURISTIC_NOISE`（0.35）の確率でランダム勅令に置き換える**（情報の不確かさ・誤読の代理）。
 1. 幸福度<45 → welfare 投資(40) 2. 役所の条件充足(人口≥200・インフラ≥15・国庫≥400) → office 3. 国庫<150 → 増税(30) 4. 人口>容量×0.9 → residential(40) 5. インフラ<26 → road(40) 6. 汚職>20 → security(40) 7. それ以外 → well(30)
 
 所見：
@@ -310,9 +310,9 @@ LLM_TIMEOUT_MS=5000  LLM_MAX_RETRIES=2  LLM_BACKOFF_BASE_MS=500  LLM_TEMPERATURE
 
 ---
 
-## 11. P1 実測（`pnpm sim`、各方策1000ゲーム、seed 1〜1000）
+## 11. P1 実測（`npm run sim`、各方策1000ゲーム、seed 1〜1000）
 
-`pnpm sim` は本番と同じ経路（DecreeParser のスキーマ検証 → AideInterpreter の歪み → RuleEngine → IntentEvaluator → エンディング判定）を通す。LLM はモックで、Bot が決めた DecreeIntent をそのまま「参謀の出力」として返す（テンプレートパーサーは通らない）。方策は §9 の定義どおり（ヒューリスティックの優先順位ルール＋`HEURISTIC_NOISE`=0.35 でランダム勅令に置換）。意図宣言・任命/解任は使わない。sim は seed 固定なので、同じ定数なら同じ結果になる。
+`npm run sim` は本番と同じ経路（DecreeParser のスキーマ検証 → AideInterpreter の歪み → RuleEngine → IntentEvaluator → エンディング判定）を通す。LLM はモックで、Bot が決めた DecreeIntent をそのまま「参謀の出力」として返す（テンプレートパーサーは通らない）。方策は §9 の定義どおり（ヒューリスティックの優先順位ルール＋`HEURISTIC_NOISE`=0.35 でランダム勅令に置換）。意図宣言・任命/解任は使わない。sim は seed 固定なので、同じ定数なら同じ結果になる。
 
 ### 11.1 最終結果（採用値：`TAX_PER_CAPITA`=1.25、`POPULATION_GROWTH_BASE`=0.03）
 
