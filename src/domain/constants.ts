@@ -43,13 +43,13 @@ export const MIN_EFFECTIVE_SCALE = 0.01;
 export const RESIDENTS_PER_HOUSING_TILE = 20;
 export const HAPPINESS_GROWTH_THRESHOLD = 50;
 export const HAPPINESS_NEUTRAL = 50;
-export const POPULATION_GROWTH_BASE = 0.025;
+export const POPULATION_GROWTH_BASE = 0.03;
 export const POPULATION_GROWTH_PER_HAPPINESS = 0.002;
 export const POPULATION_OUTFLOW_PER_HAPPINESS = 0.004;
 export const OVERCROWD_OUTFLOW_RATE = 0.15;
 
 // --- 税収と支出 ---
-export const TAX_PER_CAPITA = 1.32;
+export const TAX_PER_CAPITA = 1.25;
 export const INFRA_UPKEEP_PER_POINT = 2.0;
 export const AIDE_SALARY = 15;
 export const OFFICE_UPKEEP = 20;
