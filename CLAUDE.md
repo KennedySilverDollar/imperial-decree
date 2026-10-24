@@ -20,6 +20,8 @@
 - 主要コマンド（P0で整備済み）:
   - `pnpm dev`：Vite 開発サーバー
   - `pnpm build`：型検査（`tsc -b`）＋本番ビルド
+  - `pnpm preview`：ビルド結果を配信（`--port 4173` で `scripts/screenshots.cjs` の既定 URL）
+  - `node scripts/screenshots.cjs [URL]`：ブラウザで1ゲーム通しで遊び、`docs/screenshots/` を撮り直す（環境の Playwright を使用）
   - `pnpm test`：Vitest（`src/**/*.test.ts(x)`）
   - `pnpm typecheck`：`tsc -b --noEmit`
   - `pnpm lint`：ESLint。`Math.random` 禁止、`src/domain` からの effect/phaser/react import 禁止を含む
