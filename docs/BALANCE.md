@@ -1,271 +1,224 @@
-# BALANCE.md — P0 バランス初期案
+# BALANCE.md — P0 バランス初期案（v3.1 AMENDMENT 反映版）
 
 | 項目 | 内容 |
 |------|------|
-| ステータス | **初期案（未承認）** |
-| 対象 | SPEC v3.0 §7（パラメータ）/ §6.4（歪み）/ §8.2（地図）/ CLAUDE.md §6 #6〜#8, #11 |
-| 目標 | ランダム勅令シミュレーションで **到達率30〜50%、ゲームオーバー率20〜40%**（SPEC §9.2） |
+| ステータス | **初期案（未承認）**。AMENDMENT で決定済みの値は「**A-xx**」と明記 |
+| 対象 | SPEC v3.0 §7 / §6.4 / §8.2 ＋ `SPEC_AMENDMENT_v3.1.md` |
+| 目標（A-02） | **ヒューリスティック方策 sim の到達率 70〜90%（主指標）**、ゲームオーバー率 20〜40%。ランダム勅令 sim は参考値（合否に使わない）。人間の初見到達率 50〜70% は P4 で実測 |
 
-- 定数名はすべて `src/domain/constants.ts` にそのまま置く想定（UPPER_SNAKE_CASE）。
-- 各式の下の「根拠」は1行で、なぜその形・その値かを書く。
-- 確率判定はすべて `Rng` サービス経由（seed 付き）。本書の `rand()` は `[0,1)` の一様乱数、`randRange(a,b)` は `[a,b)` の一様乱数を指す。
-- 本書の試算は使い捨ての Python スクリプト（リポジトリ外）で行った。正式な検証は P1 の `pnpm sim` で取り直す（§9）。
+- 定数名は `src/domain/constants.ts` にそのまま置く想定（UPPER_SNAKE_CASE）。式の下の「根拠」は1行。
+- 乱数はすべて `Rng` サービス経由。`rand()` は `[0,1)`、`randRange(a,b)` は `[a,b)` の一様乱数。
+- 試算は使い捨ての Python スクリプト（リポジトリ外）によるもの。正式な検証は P1 の `pnpm sim` で取り直す（§9）。
 
 ---
 
-## 0. 数値の表現
+## 0. 状態変数（A-03・A-08 に伴う追加）
 
-| 定数 | 値 | 根拠 |
-|------|----|------|
-| — | 人口は整数（毎ターン末に `floor`）。他パラメータは内部では実数、表示は四捨五入 | 人口は「人数」なので端数が不自然。他は係数×規模で端数が出るため、内部で丸めると小さい勅令が消える |
-| — | 幸福度・インフラ・汚職率は毎ターン末に `[0,100]` へ clamp。国庫は clamp しない | 国庫のマイナスはゲームオーバー判定に使うため（SPEC §7.2） |
+SPEC §7.1 の5パラメータ＋政治資本に加え、次の状態を持つ（DECISIONS N-01, N-02）。
+
+| 状態 | 初期値 | 説明 |
+|------|--------|------|
+| `housingUnits`（住宅区画数） | `INITIAL_HOUSING_UNITS` = 8 | 住宅容量 = `floor(housingUnits) * RESIDENTS_PER_HOUSING_TILE`。初期容量160（人口120に対し余裕） |
+| `marketCount`（市場数） | 0 | 税収倍率に効く。上限 `MARKET_MAX` |
+| `officeBuilt` | false | SPEC §11.4 |
+
+人口は整数（ターン末に `floor`）。幸福度・インフラ・汚職率は `[0,100]` に clamp。国庫は clamp しない。
 
 ## 1. 初期値・資源
 
 | 定数 | 値 | 根拠 |
 |------|----|------|
-| `INITIAL_POPULATION` | 120 | SPEC §7.1 |
-| `INITIAL_TREASURY` | 500 | SPEC §7.1 |
-| `INITIAL_HAPPINESS` | 50 | SPEC §7.1 |
-| `INITIAL_INFRASTRUCTURE` | 10 | SPEC §7.1 |
-| `INITIAL_CORRUPTION` | 5 | SPEC §7.1 |
-| `INITIAL_POLITICAL_CAPITAL` | 3 | SPEC §7.1 の「3/ターン」を初期値兼収入と解釈（DECISIONS D-01） |
-| `POLITICAL_CAPITAL_INCOME` | 3 | 同上。※D-01 で「+1」案も提示中 |
-| `POLITICAL_CAPITAL_MAX` | 10 | SPEC §7.1 の範囲上限 |
-| `DECREE_POLITICAL_COST` | 1 | SPEC §7.1 |
-| `APPOINT_POLITICAL_COST` | 1 | SPEC §5.4 |
-| `DECREE_BASE_COST` | 10 | 勅令1回の国庫コスト（SPEC §7.4 の難度レバー）。年収の1割弱。勅令を出すだけで国庫が減る緊張感を最小限に付与 |
+| `INITIAL_POPULATION` / `INITIAL_TREASURY` / `INITIAL_HAPPINESS` / `INITIAL_INFRASTRUCTURE` / `INITIAL_CORRUPTION` | 120 / 500 / 50 / 10 / 5 | SPEC §7.1 |
+| `INITIAL_POLITICAL_CAPITAL` | 3 | SPEC §7.1 の「3」を初期値と解釈（上限5以下）。DECISIONS N-04 |
+| `POLITICAL_CAPITAL_INCOME` | **1** | **A-01** |
+| `POLITICAL_CAPITAL_MAX` | **5** | **A-01** |
+| `DECREE_POLITICAL_COST` / `APPOINT_POLITICAL_COST` / `DISMISS_POLITICAL_COST` | 1 / 1 / 0 | A-01 |
+| `INTENT_BONUS_HAPPINESS` | **5** | **A-01**（ボーナス種別の切替定数は廃止） |
+| `DECREE_BASE_COST` | 10 | 勅令1回の国庫コスト（SPEC §7.4 の難度レバー）。年収の1割弱 |
 | `MAX_TURNS` | 50 | SPEC §7.2 |
+| `DECREE_CHAR_LIMIT` | 40 | SPEC §6.1（暫定） |
+| `TAG_CHAR_COST` | **3** | **A-06**。タグは「対象」「規模」の最大2個 → 本文最大 40/37/34 文字 |
+
+政治資本の収支：毎ターン勅令で-1、収入+1、上限5。**任命（-1）をするとその年は勅令が出せない場合がある**（残高0のとき）ので、任命は「勅令1回分を手放す」選択になる。※勅令に政治資本が足りないときは発行不可（DECISIONS N-04）。
 
 ## 2. ターン更新式（自然変化）
 
-勅令の効果（§3）を適用した**後**に、以下を上から順に計算する（順序は DECISIONS D-15）。
+勅令の効果（§3）を適用した後に、次の順で計算する。
 
-### 2.1 住宅容量
-
-```
-capacity = HOUSING_BASE_CAPACITY + infrastructure * HOUSING_CAPACITY_PER_INFRA
-```
-
-| 定数 | 値 | 根拠 |
-|------|----|------|
-| `HOUSING_BASE_CAPACITY` | 100 | 初期インフラ10で容量200。人口120→200までは「放っておいても伸びる」余地を与える |
-| `HOUSING_CAPACITY_PER_INFRA` | 10 | インフラ20で容量300＝目標人口。インフラ25（目標値）で350となり、目標達成に必要なインフラ量と整合 |
-
-### 2.2 人口
+### 2.1 人口
 
 ```
-if population > capacity:
-    population -= (population - capacity) * OVERCROWD_OUTFLOW_RATE
-else:
-    rate = happiness >= HAPPINESS_GROWTH_THRESHOLD
-         ? POPULATION_GROWTH_BASE + (happiness - 50) * POPULATION_GROWTH_PER_HAPPINESS
-         : (happiness - 50) * POPULATION_OUTFLOW_PER_HAPPINESS        // 負の値＝流出
-    population = rate > 0 ? min(capacity, population * (1 + rate))
-                          : population * (1 + rate)
+capacity = floor(housingUnits) * RESIDENTS_PER_HOUSING_TILE
+r = happiness >= HAPPINESS_GROWTH_THRESHOLD
+      ? POPULATION_GROWTH_BASE + (happiness - 50) * POPULATION_GROWTH_PER_HAPPINESS
+      : (happiness - 50) * POPULATION_OUTFLOW_PER_HAPPINESS      // 負＝流出
+if (population > capacity && r > 0) r = 0                       // 住宅が無ければ増えない
+population = population * (1 + r)
+overcrowded = population > capacity                               // 成長後・流出前で判定
+if (overcrowded) population -= (population - capacity) * OVERCROWD_OUTFLOW_RATE
 population = floor(max(0, population))
 ```
 
 | 定数 | 値 | 根拠 |
 |------|----|------|
+| `RESIDENTS_PER_HOUSING_TILE` | 20 | A-08 の「住宅区画数×20」、SPEC §8.2 |
+| `INITIAL_HOUSING_UNITS` | 8 | 容量160。序盤は余裕、中盤（人口160超）から住宅の勅令が必要になる |
 | `HAPPINESS_GROWTH_THRESHOLD` | 50 | SPEC §7.1「50未満で人口流出」 |
-| `POPULATION_GROWTH_BASE` | 0.025 | 120→300 を自然増のみで約37年。30〜50ターンの尺に収まる（0.04だと熟練者が15ターンで終わる） |
-| `POPULATION_GROWTH_PER_HAPPINESS` | 0.002 | 幸福度70で成長率+4%。幸福投資が人口に効く手応えを出す |
-| `POPULATION_OUTFLOW_PER_HAPPINESS` | 0.004 | 幸福度30で年-8%。流出は増加より速く（失うのは簡単） |
-| `OVERCROWD_OUTFLOW_RATE` | 0.3 | 容量超過分の3割が毎年出ていく。インフラ減衰で容量が縮んだときの罰 |
+| `POPULATION_GROWTH_BASE` | 0.025 | 120→300 を約37年。30〜50ターンの尺 |
+| `POPULATION_GROWTH_PER_HAPPINESS` | 0.002 | 幸福度70で+4%/年 |
+| `POPULATION_OUTFLOW_PER_HAPPINESS` | 0.004 | 幸福度30で-8%/年。失うのは増えるより速い |
+| `OVERCROWD_OUTFLOW_RATE` | 0.15 | 超過分の15%が毎年流出。住宅放置の罰（A-08 の幸福ペナルティと併用） |
 
-### 2.3 税収と支出（国庫）
+### 2.2 税収と支出
 
 ```
-taxRevenue = population * TAX_PER_CAPITA * (1 - corruption / 100)
-upkeep     = infrastructure * INFRA_UPKEEP_PER_POINT
-           + AIDE_SALARY * (在任中の側近数)
-           + (officeBuilt ? OFFICE_UPKEEP : 0)
+taxRevenue = population * TAX_PER_CAPITA * (1 + MARKET_TAX_BONUS * marketCount) * (1 - corruption / 100)
+upkeep     = infrastructure * INFRA_UPKEEP_PER_POINT + AIDE_SALARY * (在任側近数) + (officeBuilt ? OFFICE_UPKEEP : 0)
 treasury  += taxRevenue - upkeep
 ```
 
 | 定数 | 値 | 根拠 |
 |------|----|------|
-| `TAX_PER_CAPITA` | 1.2 | 初期の年収 約137。初期国庫500＝約4年分で、最初の数手の投資余地を確保 |
-| `INFRA_UPKEEP_PER_POINT` | 1.5 | インフラ25で年37.5。インフラの作りすぎが財政を圧迫する（1.0だと無風、2.0だとランダム勅令の破綻率が過大） |
-| `AIDE_SALARY` | 15 | SPEC §7.1「給与で減少」。2人で年30。側近を減らすと財政が楽になるトレードオフ |
-| `OFFICE_UPKEEP` | 20 | 役所は建てた後も重い。ただし成功は建設ターンで即判定されることが多いため影響は小さい |
-| 汚職の効果 | `(1 - corruption/100)` で税収を目減り | CLAUDE.md §6 #6 の推奨案。村には官僚がいないため、横領の代替として税の取りこぼしで表現 |
+| `TAX_PER_CAPITA` | 1.32 | 試算で決定。初期の年収約158。調整は主にこの値で行う（難度レバー） |
+| `INFRA_UPKEEP_PER_POINT` | 2.0 | インフラ25で年50。作りすぎは財政を圧迫 |
+| `AIDE_SALARY` | 15 | 2人で年30 |
+| `OFFICE_UPKEEP` | 20 | 役所は建てた後も重い |
+| `MARKET_TAX_BONUS` | 0.12 | 市場1つで税収+12%（150の投資を約3〜4年で回収） |
+| `MARKET_MAX` | 3 | 市場だけで財政問題を解決させない |
+| 汚職の効果 | `(1 - corruption/100)` | CLAUDE.md §6 #6 の推奨案（村には官僚がいないため税の取りこぼしで表現） |
 
-### 2.4 幸福度
+### 2.3 幸福度（A-08 のペナルティを含む）
 
 ```
-equilibrium = HAPPINESS_EQUILIBRIUM_BASE
-            + infrastructure * HAPPINESS_PER_INFRA
-            - corruption * HAPPINESS_PENALTY_PER_CORRUPTION
-            - (population > capacity * CROWDING_RATIO ? CROWDING_PENALTY : 0)
+penalty = (overcrowded ? CROWDING_HAPPINESS_PENALTY : 0)              // A-08: 住宅不足（人口 > 住宅区画数×20）毎ターン
+        + (corruption > NEGLECTED_CORRUPTION_THRESHOLD ? NEGLECTED_CORRUPTION_PENALTY : 0)   // A-08: 汚職放置 毎ターン
+equilibrium = HAPPINESS_EQUILIBRIUM_BASE + infrastructure * HAPPINESS_PER_INFRA
+            - corruption * HAPPINESS_PENALTY_PER_CORRUPTION - penalty / HAPPINESS_REVERT_RATE
 happiness  += (equilibrium - happiness) * HAPPINESS_REVERT_RATE
 ```
+増税の幸福ペナルティは勅令適用時に即時（§3）。
 
 | 定数 | 値 | 根拠 |
 |------|----|------|
-| `HAPPINESS_EQUILIBRIUM_BASE` | 48 | 初期（インフラ10・汚職5）の平衡点が約51。何もしなければ微増し、村は「静かに育つ」状態から始まる |
-| `HAPPINESS_PER_INFRA` | 0.4 | インフラ25で平衡点+10。インフラが暮らしを良くする実感 |
-| `HAPPINESS_PENALTY_PER_CORRUPTION` | 0.2 | 汚職30で平衡点-6。汚職放置が幸福度経由でも効く |
-| `CROWDING_RATIO` | 0.9 | 容量の9割を超えると窮屈 |
-| `CROWDING_PENALTY` | 30 | 平衡点を30下げる（＝1ターンあたり実質-3）。人口だけ増やしてインフラを怠ると不満が溜まる |
-| `HAPPINESS_REVERT_RATE` | 0.1 | 毎年、平衡点との差の1割だけ戻る。勅令の効果が数年残る |
+| `HAPPINESS_EQUILIBRIUM_BASE` | 48 | 初期（インフラ10・汚職5）の平衡点≒51 |
+| `HAPPINESS_PER_INFRA` | 0.4 | インフラ25で+10 |
+| `HAPPINESS_PENALTY_PER_CORRUPTION` | 0.2 | 汚職30で-6 |
+| `CROWDING_HAPPINESS_PENALTY` | 3 | A-08。1ターンあたり約-3（平衡点を30下げて10%戻す） |
+| `NEGLECTED_CORRUPTION_THRESHOLD` | 50 | **A-08** |
+| `NEGLECTED_CORRUPTION_PENALTY` | 3 | A-08。住宅不足と同格 |
+| `HAPPINESS_REVERT_RATE` | 0.1 | 差の1割ずつ戻る＝勅令の効果が数年残る |
 
-### 2.5 インフラ
+### 2.4 インフラ・汚職・政治資本
 
-```
-if rand() < INFRA_DECAY_CHANCE: infrastructure -= INFRA_DECAY_AMOUNT
-```
+| 式 | 定数 | 値 | 根拠 |
+|----|------|----|------|
+| `rand() < INFRA_DECAY_CHANCE` なら `infrastructure -= INFRA_DECAY_AMOUNT` | `INFRA_DECAY_CHANCE` / `INFRA_DECAY_AMOUNT` | 0.3 / 1 | 50年で期待-15。維持の勅令を要求する |
+| `corruption += CORRUPTION_DRIFT_PER_TURN` | `CORRUPTION_DRIFT_PER_TURN` | 0.3 | 50年で+15。村では低いが放置で蝕む |
+| 政治資本 `min(MAX, 残高 + INCOME)` | — | — | ターン最後（エンディング判定後）に加算 |
 
-| 定数 | 値 | 根拠 |
-|------|----|------|
-| `INFRA_DECAY_CHANCE` | 0.3 | 50年で期待値-15。「作ったら終わり」にせず維持の勅令を要求する |
-| `INFRA_DECAY_AMOUNT` | 1 | 1回の劣化は小さく、劣化の報告（側近・新聞）を出すきっかけにする |
-
-### 2.6 汚職率
-
-```
-corruption += CORRUPTION_DRIFT_PER_TURN
-```
-
-| 定数 | 値 | 根拠 |
-|------|----|------|
-| `CORRUPTION_DRIFT_PER_TURN` | 0.3 | 50年で+15。「村では低い」（SPEC §7.1）が、放置すると税収と幸福度を蝕む |
-
-### 2.7 政治資本
-
-```
-politicalCapital = min(POLITICAL_CAPITAL_MAX, politicalCapital + POLITICAL_CAPITAL_INCOME)
-```
-ターンの最後（エンディング判定の後）に加算する。
+**注意**：汚職は初期5＋0.3/年で最大でも約20にしかならず、A-08 の「汚職>50」は通常プレイでは発動しない（安全網）。発動させたい場合は `CORRUPTION_DRIFT_PER_TURN` を上げる必要がある（DECISIONS N-08）。
 
 ---
 
-## 3. 勅令の効果（action × target 行列）
+## 3. 勅令の効果（A-03 の target 8種 × action）
 
-ルールエンジンは歪み適用後の `DecreeIntent` を以下の行列で処理する。行列にない組み合わせは **no-op＋側近報告「意味が取れなかった」**（CLAUDE.md §4-10）。
-`m` は歪み適用後の `magnitude`（`[-100,100]` に clamp）。
+効果は **target で決まる**。`action` は許可された組み合わせのときだけ有効（それ以外は no-op＋側近報告「意味が取れなかった」）。`m` は歪み適用後の `magnitude`（`[-100,100]` に clamp）。DECISIONS N-02 参照。
 
-| action | target | m>0 の効果 | 国庫コスト | m<0 |
-|--------|--------|------------|------------|-----|
-| build / invest | infrastructure, road | インフラ `+BUILD_INFRA_PER_MAG * m` | `BUILD_COST_PER_MAG * m` | no-op（取り壊しはP0で扱わない） |
-| build / invest | housing | インフラ `+HOUSING_INFRA_PER_MAG * m`、幸福 `+HOUSING_HAPPINESS_PER_MAG * m` | `HOUSING_COST_PER_MAG * m` | no-op |
-| build | office | 建築条件（§5）を満たせば `officeBuilt = true` | `OFFICE_COST`（規模に依存しない） | no-op |
-| tax | treasury（他 target も tax として扱う） | 臨時徴税：国庫 `+population * LEVY_PER_CAPITA_PER_MAG * m`、幸福 `-LEVY_HAPPINESS_PER_MAG * m` | 0 | 減税・施し：国庫 `-population * LEVY_PER_CAPITA_PER_MAG * |m|`、幸福 `+RELIEF_HAPPINESS_PER_MAG * |m|` |
-| invest | happiness | 幸福 `+INVEST_HAPPINESS_PER_MAG * m` | `INVEST_HAPPINESS_COST_PER_MAG * m` | no-op |
-| invest | population | 移住奨励：人口 `+INVEST_POPULATION_PER_MAG * m`（容量は自然変化で効く） | `INVEST_POPULATION_COST_PER_MAG * m` | no-op |
-| reform / invest | corruption | 汚職 `-REFORM_CORRUPTION_PER_MAG * m`、幸福 `-REFORM_CORRUPTION_HAPPINESS_PER_MAG * m` | `REFORM_CORRUPTION_COST_PER_MAG * m` | no-op |
-| reform | happiness | 恩赦・祭り：幸福 `+REFORM_HAPPINESS_PER_MAG * m` | `REFORM_HAPPINESS_COST_PER_MAG * m` | no-op |
-| appoint / dismiss | 任意 | no-op（P0 は手動介入のみ。DECISIONS D-04） | 0 | — |
+| target | 許可 action | m>0 の効果 | 国庫コスト | m≤0 |
+|--------|-------------|------------|------------|------|
+| road | build / invest | インフラ `+ROAD_INFRA_PER_MAG*m` | `ROAD_COST_PER_MAG*m` | no-op |
+| well | build / invest | インフラ `+WELL_INFRA_PER_MAG*m`、幸福 `+WELL_HAPPINESS_PER_MAG*m` | `WELL_COST_PER_MAG*m` | no-op |
+| residential | build / invest | 住宅区画 `+RESIDENTIAL_UNITS_PER_MAG*m`（端数は蓄積） | `RESIDENTIAL_COST_PER_MAG*m` | no-op |
+| market | build / invest | 市場数 +1（`MARKET_MAX` まで） | `MARKET_COST`（m に依存しない） | no-op |
+| office | build | 建築条件（§5）を満たせば `officeBuilt = true` | `OFFICE_COST` | no-op |
+| tax | **tax（任意の target でも）** / reform | **増税**：国庫 `+population*LEVY_PER_CAPITA_PER_MAG*m`、幸福 `-LEVY_HAPPINESS_PER_MAG*m`（**A-08**：magnitude に比例） | 0 | **減税・施し**：国庫 `-population*LEVY_PER_CAPITA_PER_MAG*|m|`、幸福 `+RELIEF_HAPPINESS_PER_MAG*|m|` |
+| welfare | invest / reform | 幸福 `+WELFARE_HAPPINESS_PER_MAG*m` | `WELFARE_COST_PER_MAG*m` | no-op |
+| security | invest / reform | 汚職 `-SECURITY_CORRUPTION_PER_MAG*m`、幸福 `+SECURITY_HAPPINESS_PER_MAG*m` | `SECURITY_COST_PER_MAG*m` | no-op |
+| （任意） | appoint / dismiss | no-op（P0 は手動介入のみ。DECISIONS D-04） | 0 | — |
 
-**予算不足時**：コストが現在の国庫を上回る場合、効果とコストを `treasury / cost` 倍に縮小する（側近報告「予算不足で規模を縮小した」）。役所だけは縮小せず不成立。根拠：勅令1回で即破綻させず、破綻は「維持費と給与の積み重ね」で起こるようにする。
+**予算不足（A-07）**：コスト＞国庫のとき、効果とコストを `treasury / cost` 倍に縮小し、縮小率を「側近による補正」に出す。**office のみ縮小せず不成立**。market は固定コストのため縮小せず不成立（DECISIONS N-02）。
 
 | 定数 | 値 | 根拠 |
 |------|----|------|
-| `BUILD_INFRA_PER_MAG` | 0.12 | 規模50で+6。目標まで（+15＋劣化分）おおむね4〜5回の勅令 |
-| `BUILD_COST_PER_MAG` | 4 | 規模50で200＝約1.5年分の税収。インフラ1点あたり約33 |
-| `HOUSING_INFRA_PER_MAG` | 0.08 | 住宅は道路より効率が悪いが幸福が上がる。選択の余地を作る |
-| `HOUSING_HAPPINESS_PER_MAG` | 0.03 | 規模50で幸福+1.5 |
-| `HOUSING_COST_PER_MAG` | 3 | 規模50で150 |
+| `ROAD_INFRA_PER_MAG` / `ROAD_COST_PER_MAG` | 0.12 / 4 | 規模50でインフラ+6、200。目標（+15＋劣化分）まで4〜5回 |
+| `WELL_INFRA_PER_MAG` / `WELL_HAPPINESS_PER_MAG` / `WELL_COST_PER_MAG` | 0.06 / 0.05 / 3 | 道路の半分のインフラだが幸福も上がる。規模50で+3インフラ・+2.5幸福・150 |
+| `RESIDENTIAL_UNITS_PER_MAG` / `RESIDENTIAL_COST_PER_MAG` | 0.06 / 5 | 規模50で+3区画（+60人分）・250。人口の天井を押し上げる |
+| `MARKET_COST` | 150 | §2.2 の回収年数から |
 | `LEVY_PER_CAPITA_PER_MAG` | 0.03 | 人口120・規模50で+180。即効性はあるが… |
-| `LEVY_HAPPINESS_PER_MAG` | 0.2 | …幸福-10。連発すると人口流出に転じる |
-| `RELIEF_HAPPINESS_PER_MAG` | 0.1 | 減税は徴税より幸福効率が悪い（取るのは簡単、喜ばせるのは難しい） |
-| `INVEST_HAPPINESS_PER_MAG` | 0.15 | 規模50で幸福+7.5 |
-| `INVEST_HAPPINESS_COST_PER_MAG` | 3 | 規模50で150 |
-| `INVEST_POPULATION_PER_MAG` | 0.15 | 規模50で+7人。容量の上限には勝てない（直接人口を買う抜け道を抑える） |
-| `INVEST_POPULATION_COST_PER_MAG` | 3 | 規模50で150 |
-| `REFORM_CORRUPTION_PER_MAG` | 0.1 | 規模50で汚職-5 |
-| `REFORM_CORRUPTION_COST_PER_MAG` | 2 | 規模50で100 |
-| `REFORM_CORRUPTION_HAPPINESS_PER_MAG` | 0.03 | 綱紀粛正は少し嫌われる（規模50で-1.5） |
-| `REFORM_HAPPINESS_PER_MAG` | 0.1 | 恩赦は invest より安いが効果も小さい |
-| `REFORM_HAPPINESS_COST_PER_MAG` | 2 | 同上 |
+| `LEVY_HAPPINESS_PER_MAG` | 0.25 | …幸福-12.5。連発すると離反へ（A-08）。試算で 0.2→0.25 に上げた |
+| `RELIEF_HAPPINESS_PER_MAG` | 0.1 | 取るのは簡単、喜ばせるのは難しい |
+| `WELFARE_HAPPINESS_PER_MAG` / `WELFARE_COST_PER_MAG` | 0.15 / 3 | 規模50で幸福+7.5・150 |
+| `SECURITY_CORRUPTION_PER_MAG` / `SECURITY_HAPPINESS_PER_MAG` / `SECURITY_COST_PER_MAG` | 0.1 / 0.03 / 2 | 規模50で汚職-5・幸福+1.5・100 |
 
-### 3.1 `budget` の扱い
-LLM 出力の `budget` は**上限**としてのみ使う：`budget > 0 && budget < cost` なら効果とコストを `budget / cost` 倍に縮小。コスト計算自体は上表の式で行う。根拠：LLM が出した金額をそのまま国庫から引くと、数値更新を LLM に委ねることになる（CLAUDE.md §4-2）。DECISIONS D-08。
-
-### 3.2 `confidence` の扱い
-`confidence < LOW_CONFIDENCE_THRESHOLD`（**0.3**）なら no-op＋「意味が取れなかった」。根拠：テンプレートパーサーのフォールバックが「何もマッチしなかった」ときに返す値と揃える。DECISIONS D-09。
+### 3.1 `budget` と `confidence`
+- `budget` は上限としてのみ使う。`budget > 0 && budget < cost` なら効果とコストを `budget/cost` 倍に縮小（DECISIONS D-08）。
+- `confidence < LOW_CONFIDENCE_THRESHOLD`（0.3）なら no-op＋「意味が取れなかった」。
 
 ---
 
 ## 4. 側近による歪み（SPEC §6.4）
 
-### 4.1 担当側近の選択（DECISIONS D-06）
-1. `target`（と `action=tax`）に専門が一致する側近を優先。
-2. 同点なら信頼関係が高い側近。さらに同点なら在任が長い側近。
-3. 側近0人なら勅令は実行されない（政治資本も国庫も消費しない）。自然変化だけ進む。
+### 4.1 担当側近の選択（A-05）
+1. target に専門が一致する側近（または action=tax で専門＝経済）を優先。
+2. 同点なら信頼関係が高い方。さらに同点なら在任が長い方。
+3. 側近0人なら勅令は実行されず政治資本・国庫を消費しない。
+4. 3段表示に「選ばれた側近」と「選定理由」（専門一致／信頼関係の高さ）を出す。
 
-**専門一致表**（`SPECIALTY_TARGETS`）
+| 専門 | 一致する target |
+|------|-----------------|
+| インフラ | residential, road, well, office, market |
+| 経済 | tax, market, security, および action=tax |
+| 治安 | welfare, security |
+| 環境 | well |
 
-| 専門 | 一致する target / action |
-|------|--------------------------|
-| インフラ | infrastructure, road, housing, office |
-| 経済 | treasury, corruption, および action=tax |
-| 治安 | happiness, population |
-| 環境 | （P0 では一致なし） |
+※ market は インフラ・経済の両方に一致（同点→信頼順）。初期側近A=インフラ、B=経済。
 
-根拠：初期側近 A=インフラ、B=経済で、建設系は A、税・汚職は B に自然に振り分けられ、プレイヤーが「誰に渡るか」を予測できる。
-
-### 4.2 解釈精度（SPEC §7.6）
+### 4.2 解釈精度（A-04）
 
 ```
-accuracy = clamp(
-    ACCURACY_BASE
-  + ability / ACCURACY_ABILITY_DIVISOR
-  + (specialtyMatch ? ACCURACY_SPECIALTY_BONUS : 0)
-  + (trust >= ACCURACY_TRUST_THRESHOLD ? ACCURACY_TRUST_BONUS : 0)
-  - (ambition >= ACCURACY_AMBITION_THRESHOLD && factionConflict ? ACCURACY_AMBITION_PENALTY : 0),
-  0, 1)
+accuracy = clamp(ACCURACY_BASE + ability / ACCURACY_ABILITY_DIVISOR
+                 + (specialtyMatch ? ACCURACY_SPECIALTY_BONUS : 0)
+                 + (trust >= ACCURACY_TRUST_THRESHOLD ? ACCURACY_TRUST_BONUS : 0)
+                 - (ambition >= ACCURACY_AMBITION_THRESHOLD && factionConflict ? ACCURACY_AMBITION_PENALTY : 0), 0, 1)
 ```
 
-| 定数 | 値 | 根拠 |
-|------|----|------|
-| `ACCURACY_BASE` | 0.3 | SPEC §7.6 |
-| `ACCURACY_ABILITY_DIVISOR` | 200 | SPEC §7.6 |
-| `ACCURACY_SPECIALTY_BONUS` | 0.2 | SPEC §7.6 |
-| `ACCURACY_TRUST_THRESHOLD` | 70（`>=`） | SPEC は `> 70`。初期の側近A（信頼70）がちょうど対象外になるため `>=` を提案（DECISIONS D-07） |
-| `ACCURACY_TRUST_BONUS` | 0.1 | SPEC §7.6 |
-| `ACCURACY_AMBITION_THRESHOLD` | 70（`>=`） | SPEC は `> 70`。初期の側近B（野心70）がちょうど対象外になるため `>=` を提案（D-07） |
-| `ACCURACY_AMBITION_PENALTY` | 0.2 | SPEC §7.6 |
+| 定数 | 値 |
+|------|----|
+| `ACCURACY_BASE` / `ACCURACY_ABILITY_DIVISOR` | 0.3 / 200 |
+| `ACCURACY_SPECIALTY_BONUS` | 0.2 |
+| `ACCURACY_TRUST_THRESHOLD`（`>=`）/ `ACCURACY_TRUST_BONUS` | 70 / 0.1 |
+| `ACCURACY_AMBITION_THRESHOLD`（`>=`）/ `ACCURACY_AMBITION_PENALTY` | 70 / 0.2 |
 
-参考（`>=` 採用時）：A が建設を担当 → 0.9、A が専門外 → 0.7、B が徴税（派閥対立あり） → 0.675、B が専門外 → 0.675。
+参考：A がインフラ系を担当 → 0.9、A が専門外 → 0.7、B が経済系（派閥対立なし） → 0.875、B が増税（商業派と対立・野心70） → 0.675。
 
 ### 4.3 派閥対立（`FACTION_CONFLICTS`）
 
 | 派閥 | 対立する勅令 | 根拠 |
 |------|--------------|------|
-| 開発 | build/invest の m<0、tax の m<0（減税＝開発財源の減少） | 開発派は財源と事業の縮小を嫌う |
-| 商業 | tax の m>0、reform×corruption | 商人は増税と綱紀粛正（既得権の締め付け）を嫌う |
-| 保守 | build の m>60（急な大事業） | 変化を嫌う。P0 の任命候補でのみ登場 |
-| 軍事 | invest×happiness、reform×happiness | 民への施しを嫌う。候補でのみ登場 |
-| 環境 | build×road, build×infrastructure の m>0 | 開発を嫌う。候補でのみ登場 |
+| 開発 | build/invest/tax で m<0 | 開発派は財源と事業の縮小を嫌う |
+| 商業 | tax で m>0、target=security | 商人は増税と取り締まりを嫌う |
+| 保守 | build で m>60（急な大事業） | 変化を嫌う（任命候補のみ） |
+| 軍事 | welfare への投資 | 民への施しを嫌う（任命候補のみ） |
+| 環境 | road への build（m>0） | 開発を嫌う（任命候補のみ） |
 
 ### 4.4 歪みの判定（この順に独立判定）
 
 | 歪み | 発生条件 | 確率 | 効果 | 定数 |
 |------|----------|------|------|------|
-| 規模の誤読 | 常に判定 | `(1 - accuracy) * MISREAD_CHANCE_SCALE` | `m *= 1 ± randRange(MISREAD_MIN, MISREAD_MAX)`（符号は等確率） | `MISREAD_CHANCE_SCALE=1.0`, `MISREAD_MIN=0.3`, `MISREAD_MAX=0.5` |
-| 対象の取り違え | 専門外のときのみ | `(1 - accuracy) * TARGET_SWAP_CHANCE_SCALE` | 同じ action の有効 target から、元以外を一様に選ぶ | `TARGET_SWAP_CHANCE_SCALE=0.5` |
-| 骨抜き | 派閥対立のときのみ | `WATER_DOWN_BASE_CHANCE + (100 - loyalty) / WATER_DOWN_LOYALTY_DIVISOR` | 効果量 ×`WATER_DOWN_EFFECT_FACTOR`、**コストは減らない** | `WATER_DOWN_BASE_CHANCE=0.4`, `WATER_DOWN_LOYALTY_DIVISOR=200`, `WATER_DOWN_EFFECT_FACTOR=0.5` |
-| 隠蔽 | `ambition >= CONCEAL_AMBITION_MIN` かつ `loyalty <= CONCEAL_LOYALTY_MAX` | `CONCEAL_BASE_CHANCE + (ambition - loyalty) / CONCEAL_DIVISOR` | そのターンの側近報告から**悪化した項目**を消す（状態は変えない） | `CONCEAL_AMBITION_MIN=60`, `CONCEAL_LOYALTY_MAX=60`, `CONCEAL_BASE_CHANCE=0.3`, `CONCEAL_DIVISOR=100` |
-| 横領 | 町以降 | — | **P0 では発生しない**（村に官僚がいないため。汚職は §2.3 の税収目減りで表現） | — |
+| 規模の誤読 | 常に | `(1-accuracy)*MISREAD_CHANCE_SCALE` | `m *= 1 ± randRange(MISREAD_MIN, MISREAD_MAX)`（符号は等確率） | 1.0 / 0.3 / 0.5 |
+| 対象の取り違え | 専門外のみ | `(1-accuracy)*TARGET_SWAP_CHANCE_SCALE` | 同じ action で許可された別 target をランダムに選ぶ | 0.5 |
+| 骨抜き | 派閥対立のみ | `WATER_DOWN_BASE_CHANCE + (100-loyalty)/WATER_DOWN_LOYALTY_DIVISOR` | 効果量 ×`WATER_DOWN_EFFECT_FACTOR`、**コストは減らない** | 0.4 / 200 / 0.5 |
+| 隠蔽 | `ambition>=CONCEAL_AMBITION_MIN` かつ `loyalty<=CONCEAL_LOYALTY_MAX` | `CONCEAL_BASE_CHANCE + (ambition-loyalty)/CONCEAL_DIVISOR` | 側近報告から**悪化項目**を消す（状態は変えない） | 60 / 60 / 0.3 / 100 |
+| 横領 | 町以降 | — | P0 では発生しない（汚職は税収目減りで表現） | — |
 
-根拠（1行ずつ）：
-- 誤読：SPEC「±30〜50%」をそのまま一様分布に。精度0.9でも1割で発生し、「優秀でも完璧ではない」。
-- 取り違え：専門外のみ・誤読の半分の頻度。頻発すると理不尽（SPEC §9.3-3）なので抑えめ。
-- 骨抜き：忠誠80で50%、忠誠60で60%。「コストは払ったのに中身が半分」が空洞（§6）と新聞の「立派な工事」記事の乖離を生む。
-- 隠蔽：初期 B（野心70・忠誠60）で40%、A は条件外。報告の信頼性に側近差をつける。
+根拠：誤読は SPEC「±30〜50%」を一様分布に。取り違えは専門外のみ・誤読の半分の頻度（理不尽さを抑える、SPEC §9.3-3）。骨抜きは「コストは払ったのに中身が半分」で新聞との乖離を生む。隠蔽は初期 B（野心70・忠誠60）で40%となり、報告の信頼性に側近差をつける。
 
-### 4.5 報告の欠落（能力・信頼による）
+### 4.5 報告の欠落
 
-| 定数 | 値 | 効果 | 根拠 |
-|------|----|------|------|
-| `REPORT_OMIT_CHANCE_DIVISOR` | 400 | 各報告項目が `(100 - ability) / 400` で欠落（能力60で10%） | SPEC §5.2「能力が低いと見落とし」 |
-| `REPORT_LOW_TRUST_THRESHOLD` | 40 | 信頼がこれ未満なら報告項目数を `REPORT_LOW_TRUST_MAX_ITEMS` に制限 | SPEC §5.2「信頼が低いと報告が減る」 |
-| `REPORT_LOW_TRUST_MAX_ITEMS` | 2 | 同上 | 情報が減るが、ゼロにはしない |
-
-### 4.6 試算で分かったこと
-歪みを全て無効にしてもランダム勅令の到達率は 33%→36% 程度しか変わらない。歪みは**到達率よりも「意図と結果のズレ」に効く**設計になっている。歪みを主要な難度レバーにしたい場合は、骨抜きのコスト据え置きや誤読幅を強める必要がある（P1 の sim で再検証）。
+| 定数 | 値 | 効果 |
+|------|----|------|
+| `REPORT_OMIT_CHANCE_DIVISOR` | 400 | 各報告項目が `(100-ability)/400` で欠落（能力60で10%） |
+| `REPORT_LOW_TRUST_THRESHOLD` / `REPORT_LOW_TRUST_MAX_ITEMS` | 40 / 2 | 信頼が低いと報告項目が減る（SPEC §5.2） |
 
 ---
 
@@ -273,86 +226,73 @@ accuracy = clamp(
 
 | 定数 | 値 | 根拠 |
 |------|----|------|
-| `OFFICE_COST` | 400 | 約3年分の税収。目標直前に「貯める」判断を強いる |
-| `OFFICE_MIN_POPULATION` | 200 | 人口が育つ前に建ててしまう早期決着を防ぐ |
-| `OFFICE_MIN_INFRASTRUCTURE` | 15 | 同上。道路が通っていない村に役所は建たない |
-| 不成立時 | 国庫・効果とも変化なし（政治資本と `DECREE_BASE_COST` は消費）。側近報告で「条件を満たさない」と理由を返す | 条件をプレイヤーに学ばせる |
-| 予算不足時 | 縮小せず不成立 | 「半分の役所」は意味をなさない |
-| 建設後 | `OFFICE_UPKEEP`（§2.3）。地図に役所1区画 | SPEC §8.2 |
-
----
+| `OFFICE_COST` | 400 | 約3年分の税収。目標直前に貯める判断を強いる |
+| `OFFICE_MIN_POPULATION` | 200 | 人口が育つ前の早期決着を防ぐ |
+| `OFFICE_MIN_INFRASTRUCTURE` | 15 | 道路の通っていない村に役所は建たない |
+| 不成立時 | 国庫・パラメータ変化なし（政治資本と `DECREE_BASE_COST` は消費）。理由を側近報告で返す（A-07 の縮小表記と同じ欄） |
+| 建設後 | `OFFICE_UPKEEP`。地図に役所1区画（SPEC §8.2） |
 
 ## 6. 地図・見た目と実態
 
 | 定数 | 値 | 根拠 |
 |------|----|------|
 | `GRID_SIZE` | 10 | SPEC §8.2 |
-| `RESIDENTS_PER_HOUSING_TILE` | 20 | SPEC §8.2 `floor(人口/20)` |
+| 住宅タイル数 | `floor(housingUnits)`（SPEC の `floor(人口/20)` から変更案。DECISIONS N-01） | A-08 の「住宅区画数」と整合させる |
 | `INFRA_PER_ROAD_TILE` | 5 | SPEC §8.2 `floor(インフラ/5)` |
-| `MIN_EMPTY_TILES` | 10 | SPEC「空き地は常に一定数確保」。超過分の住宅は描かない（人口は減らない） |
-| 配置順 | 中心(4,4)から時計回りの螺旋順に、役所→道路→住宅→空き地 | 決定論的・seed 不要。「中心から広がる村」に見える |
-| 空洞 | 骨抜きされた build/housing の「失われた効果量」を `hollowInfrastructure` として記録。見た目の道路数は `floor((infrastructure + hollow)/5)` | `visual_state` と `actual_state` の乖離を、骨抜きから自然に生む |
-| `HOLLOW_DECAY_PER_TURN` | 1 | 空洞は年1ずつ解消（見かけ倒しも崩れていく） |
-| `HOLLOW_DISCLOSE_ABILITY_MIN` | 70 | 能力70以上の側近は空洞を報告で開示し、亀裂アイコンが付く（SPEC §12.7） |
-
----
+| `MIN_EMPTY_TILES` | 10 | SPEC「空き地は常に一定数確保」。超過分は描かない |
+| 配置順 | 中心から時計回りの螺旋順に 役所→道路→住宅→市場→空き地 | 決定論的 |
+| 市場タイル | `marketCount` 枚 | SPEC §12.7 のタイル種別。P0 で描く（A-03 の target に含まれたため） |
+| `hollowInfrastructure` | 骨抜きで失われた build 系の効果量を記録。見た目の道路数は `floor((infrastructure+hollow)/5)` | 見た目と実態の乖離を骨抜きから生む |
+| `HOLLOW_DECAY_PER_TURN` / `HOLLOW_DISCLOSE_ABILITY_MIN` | 1 / 70 | 能力70以上の側近は空洞を開示し亀裂アイコンを表示 |
 
 ## 7. 新聞（偏向度30）
 
 | 定数 | 値 | 根拠 |
 |------|----|------|
 | `NEWSPAPER_BIAS` | 30 | SPEC §4.1 |
-| `NEWSPAPER_NOISE_RATIO` | `NEWSPAPER_BIAS / 100`（=0.3） | 報告数値 = 実数値 × `(1 + randRange(-0.3, 0.3))`。CLAUDE.md §6 #9 |
-| `NEWSPAPER_TONE` | `"progovernment"` | 偏向の向き：悪化は控えめな語、改善は誇張した語を選ぶ（論調語テーブルは i18n）。ノイズは対称、論調だけ偏る |
-| `NEWSPAPER_TONE_CHANCE` | 0.3（=BIAS/100） | 各記事で論調語が偏る確率 |
+| 数値ノイズ | 報告数値 = 実数値 × `(1 + randRange(-BIAS/100, BIAS/100))` | CLAUDE.md §6 #9 |
+| `NEWSPAPER_TONE_CHANCE` | 0.3 | 各記事で論調語が政府寄り（悪化は控えめ、改善は誇張）になる確率 |
 
 ---
 
-## 8. 意図達成ボーナス
-
-| 定数 | 値 | 根拠 |
-|------|----|------|
-| `INTENT_BONUS_KIND` | `"politicalCapital"` | CLAUDE.md §6 #2。`"happiness"` に切替可能 |
-| `INTENT_BONUS_POLITICAL_CAPITAL` | 1 | SPEC §6.2 |
-| `INTENT_BONUS_HAPPINESS` | 5 | SPEC §6.2 |
-
-**注意**：政治資本が +3/ターン・上限10・消費1/ターンのままだと、政治資本はほぼ常に余り、ボーナス+1 の価値がゼロに近い（DECISIONS D-01, D-02）。
-
----
+## 8. 意図達成ボーナス（A-01）
+幸福度 `+INTENT_BONUS_HAPPINESS`（5）。ペナルティなし。判定は宣言値と実変化の単純比較（DECISIONS D-03）。
 
 ## 9. 試算結果（2026-10-24、使い捨てスクリプト、各2000本）
 
-本書の値で、意図宣言・新聞・報告の不確かさは含めず（ルールエンジンのみ）に試算した。
+| 方策 | 到達 | ゲームオーバー | 時間切れ | 平均到達ターン | GO内訳 |
+|------|------|----------------|----------|----------------|--------|
+| **ヒューリスティック（主指標）** | **73%** | **20%** | 8% | 33.3 | 財政破綻 20% |
+| ヒューリスティック（ノイズなし・参考） | 99% | 0% | 0% | 28.8 | — |
+| ランダム勅令（参考・合否に使わない） | 2% | 75% | 23% | 39.5 | 財政64%・幸福度8%・人口2% |
 
-| 方策 | 到達 | ゲームオーバー | 時間切れ | 平均到達ターン |
-|------|------|----------------|----------|----------------|
-| ランダム勅令（有効な action×target から一様、規模10〜100、15%で負） | **33%** | **36%** | 32% | 36.6 |
-| 半合理（50%ランダム／50%ヒューリスティック） | 87% | 8% | 5% | 31.3 |
-| ヒューリスティック（真値を見て最善手） | 100% | 0% | 0% | 24.3 |
+**ヒューリスティック方策の定義**（P1 の `pnpm sim` で同じものを実装する）：真の状態を見て次の優先順位で決め、**各ターン `HEURISTIC_NOISE`（0.35）の確率でランダム勅令に置き換える**（情報の不確かさ・誤読の代理）。
+1. 幸福度<45 → welfare 投資(40) 2. 役所の条件充足(人口≥200・インフラ≥15・国庫≥400) → office 3. 国庫<150 → 増税(30) 4. 人口>容量×0.9 → residential(40) 5. インフラ<26 → road(40) 6. 汚職>20 → security(40) 7. それ以外 → well(30)
 
-- ランダム勅令は目標帯（到達30〜50%、GO 20〜40%）に入った。
-- **ゲームオーバーのほぼ全てが財政破綻**。人口壊滅・民衆離反はほぼ起きない（0.1%）。3種の終わり方を体験させたいなら、徴税の幸福ペナルティ強化か幸福度の減衰を強める必要がある（DECISIONS D-20）。
-- 真値が見えるヒューリスティックは全員到達する。実プレイでは新聞ノイズ・隠蔽・欠落・LLM の解釈揺れがあるので下がるはずだが、**人間の到達率がランダム方策より高くなるのは確実**。「`pnpm sim` のランダム勅令で30〜50%」と「テスターで30〜50%」は別物として扱う必要がある（DECISIONS D-19）。
+所見：
+- **主指標は目標帯に入った**が、「到達70〜90%」と「GO20〜40%」は合計100%以内に収める必要があり、**到達73%・GO20%・時間切れ8%と帯の端**になっている（DECISIONS N-03）。
+- **GO の内訳は、ヒューリスティックではほぼ財政破綻**。幸福度・人口の経路（A-08）は、ランダム方策では約10%発生するが、状況を見て手を打つ方策では起きにくい。「経路が現実的に発生する」の検証は、**人間のプレイ（P4）で見るしかない**（DECISIONS N-03）。
+- 歪みを無効にすると到達率が約56%に下がった（歪み有 73%）。現在の歪みは平均的には難度を上げておらず、結果のばらつき（意図とのズレ）を作る側に効いている。歪みの強さは P1 の sim で再検証が必要。
+- 試算スクリプトは §3 の式を簡略化している（報告・新聞・意図は含まない）。数値は目安。
 
 ## 10. 定数一覧（constants.ts 転記用）
 
 ```
 INITIAL_POPULATION=120  INITIAL_TREASURY=500  INITIAL_HAPPINESS=50  INITIAL_INFRASTRUCTURE=10  INITIAL_CORRUPTION=5
-INITIAL_POLITICAL_CAPITAL=3  POLITICAL_CAPITAL_INCOME=3  POLITICAL_CAPITAL_MAX=10
-DECREE_POLITICAL_COST=1  APPOINT_POLITICAL_COST=1  DECREE_BASE_COST=10  MAX_TURNS=50
-DECREE_CHAR_LIMIT=40  TAG_CHAR_COST=5
-HOUSING_BASE_CAPACITY=100  HOUSING_CAPACITY_PER_INFRA=10
-HAPPINESS_GROWTH_THRESHOLD=50  POPULATION_GROWTH_BASE=0.025  POPULATION_GROWTH_PER_HAPPINESS=0.002
-POPULATION_OUTFLOW_PER_HAPPINESS=0.004  OVERCROWD_OUTFLOW_RATE=0.3
-TAX_PER_CAPITA=1.2  INFRA_UPKEEP_PER_POINT=1.5  AIDE_SALARY=15  OFFICE_UPKEEP=20
-HAPPINESS_EQUILIBRIUM_BASE=48  HAPPINESS_PER_INFRA=0.4  HAPPINESS_PENALTY_PER_CORRUPTION=0.2
-CROWDING_RATIO=0.9  CROWDING_PENALTY=30  HAPPINESS_REVERT_RATE=0.1
+INITIAL_HOUSING_UNITS=8  INITIAL_POLITICAL_CAPITAL=3  POLITICAL_CAPITAL_INCOME=1  POLITICAL_CAPITAL_MAX=5
+DECREE_POLITICAL_COST=1  APPOINT_POLITICAL_COST=1  DISMISS_POLITICAL_COST=0  DECREE_BASE_COST=10  MAX_TURNS=50
+DECREE_CHAR_LIMIT=40  TAG_CHAR_COST=3  MAX_TAGS=2  INTENT_BONUS_HAPPINESS=5
+RESIDENTS_PER_HOUSING_TILE=20  HAPPINESS_GROWTH_THRESHOLD=50  POPULATION_GROWTH_BASE=0.025  POPULATION_GROWTH_PER_HAPPINESS=0.002
+POPULATION_OUTFLOW_PER_HAPPINESS=0.004  OVERCROWD_OUTFLOW_RATE=0.15
+TAX_PER_CAPITA=1.32  INFRA_UPKEEP_PER_POINT=2.0  AIDE_SALARY=15  OFFICE_UPKEEP=20  MARKET_TAX_BONUS=0.12  MARKET_MAX=3
+HAPPINESS_EQUILIBRIUM_BASE=48  HAPPINESS_PER_INFRA=0.4  HAPPINESS_PENALTY_PER_CORRUPTION=0.2  HAPPINESS_REVERT_RATE=0.1
+CROWDING_HAPPINESS_PENALTY=3  NEGLECTED_CORRUPTION_THRESHOLD=50  NEGLECTED_CORRUPTION_PENALTY=3
 INFRA_DECAY_CHANCE=0.3  INFRA_DECAY_AMOUNT=1  CORRUPTION_DRIFT_PER_TURN=0.3
-BUILD_INFRA_PER_MAG=0.12  BUILD_COST_PER_MAG=4  HOUSING_INFRA_PER_MAG=0.08  HOUSING_HAPPINESS_PER_MAG=0.03  HOUSING_COST_PER_MAG=3
-LEVY_PER_CAPITA_PER_MAG=0.03  LEVY_HAPPINESS_PER_MAG=0.2  RELIEF_HAPPINESS_PER_MAG=0.1
-INVEST_HAPPINESS_PER_MAG=0.15  INVEST_HAPPINESS_COST_PER_MAG=3  INVEST_POPULATION_PER_MAG=0.15  INVEST_POPULATION_COST_PER_MAG=3
-REFORM_CORRUPTION_PER_MAG=0.1  REFORM_CORRUPTION_COST_PER_MAG=2  REFORM_CORRUPTION_HAPPINESS_PER_MAG=0.03
-REFORM_HAPPINESS_PER_MAG=0.1  REFORM_HAPPINESS_COST_PER_MAG=2
+ROAD_INFRA_PER_MAG=0.12  ROAD_COST_PER_MAG=4  WELL_INFRA_PER_MAG=0.06  WELL_HAPPINESS_PER_MAG=0.05  WELL_COST_PER_MAG=3
+RESIDENTIAL_UNITS_PER_MAG=0.06  RESIDENTIAL_COST_PER_MAG=5  MARKET_COST=150
+LEVY_PER_CAPITA_PER_MAG=0.03  LEVY_HAPPINESS_PER_MAG=0.25  RELIEF_HAPPINESS_PER_MAG=0.1
+WELFARE_HAPPINESS_PER_MAG=0.15  WELFARE_COST_PER_MAG=3
+SECURITY_CORRUPTION_PER_MAG=0.1  SECURITY_HAPPINESS_PER_MAG=0.03  SECURITY_COST_PER_MAG=2
 LOW_CONFIDENCE_THRESHOLD=0.3
 ACCURACY_BASE=0.3  ACCURACY_ABILITY_DIVISOR=200  ACCURACY_SPECIALTY_BONUS=0.2  ACCURACY_TRUST_THRESHOLD=70  ACCURACY_TRUST_BONUS=0.1
 ACCURACY_AMBITION_THRESHOLD=70  ACCURACY_AMBITION_PENALTY=0.2
@@ -361,10 +301,9 @@ WATER_DOWN_BASE_CHANCE=0.4  WATER_DOWN_LOYALTY_DIVISOR=200  WATER_DOWN_EFFECT_FA
 CONCEAL_AMBITION_MIN=60  CONCEAL_LOYALTY_MAX=60  CONCEAL_BASE_CHANCE=0.3  CONCEAL_DIVISOR=100
 REPORT_OMIT_CHANCE_DIVISOR=400  REPORT_LOW_TRUST_THRESHOLD=40  REPORT_LOW_TRUST_MAX_ITEMS=2
 OFFICE_COST=400  OFFICE_MIN_POPULATION=200  OFFICE_MIN_INFRASTRUCTURE=15
-GRID_SIZE=10  RESIDENTS_PER_HOUSING_TILE=20  INFRA_PER_ROAD_TILE=5  MIN_EMPTY_TILES=10
-HOLLOW_DECAY_PER_TURN=1  HOLLOW_DISCLOSE_ABILITY_MIN=70
+GRID_SIZE=10  INFRA_PER_ROAD_TILE=5  MIN_EMPTY_TILES=10  HOLLOW_DECAY_PER_TURN=1  HOLLOW_DISCLOSE_ABILITY_MIN=70
 NEWSPAPER_BIAS=30  NEWSPAPER_TONE_CHANCE=0.3
-INTENT_BONUS_POLITICAL_CAPITAL=1  INTENT_BONUS_HAPPINESS=5
 SUCCESS_POPULATION=300  SUCCESS_INFRASTRUCTURE=25
+HEURISTIC_NOISE=0.35  （sim 専用）
 LLM_TIMEOUT_MS=5000  LLM_MAX_RETRIES=2  LLM_BACKOFF_BASE_MS=500  LLM_TEMPERATURE=0.2
 ```
