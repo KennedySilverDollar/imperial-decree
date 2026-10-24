@@ -23,6 +23,8 @@
   - `npm run preview`：ビルド結果を配信（`npm run preview -- --port 4173` で `scripts/screenshots.cjs` の既定 URL）
   - `node scripts/screenshots.cjs [URL]`：ブラウザで1ゲーム通しで遊び、`docs/screenshots/` を撮り直す（環境の Playwright を使用）
   - `npm test`：Vitest（`src/**/*.test.ts(x)`）
+  - `npx wrangler dev --port 8787`：LLM プロキシ（`src/proxy/worker.ts`）をローカルで起動。設定は `.dev.vars`（`.dev.vars.example` をコピー）。フロントは `.env.local`（`.env.example` をコピー）で接続先を指定し、未設定ならモック参謀。手順・障害の模擬・本番デプロイは `docs/DEPLOY.md`
+  - `node scripts/fake-mistral.mjs [port]`：キーなしで結線を確かめるための偽 Mistral（LLM ではない）
   - `npm run typecheck`：`tsc -b --noEmit`
   - `npm run lint`：ESLint。`Math.random` 禁止、`src/domain` からの effect/phaser/react import 禁止を含む
   - `npm run sim -- [ゲーム数]`：ヘッドレスシミュレーション（既定1000ゲーム×3方策）。A-02 の合否を PASS/FAIL で出力。結果は `docs/BALANCE.md` §11
