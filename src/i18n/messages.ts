@@ -2,7 +2,7 @@
 // テンプレートパーサーの辞書・メタ命令パターンも言語依存の語彙としてここに置く。
 
 import type { Action, ParamKey, Target } from "../domain/Vocabulary";
-import type { SelectionReason } from "../domain/Aide";
+import type { Faction, SelectionReason, Specialty } from "../domain/Aide";
 import type { GameOverReason } from "../domain/Ending";
 import type { FixedCostFailure, LLMFailureReason, NewspaperTone, NoopReason } from "../domain/TurnRecord";
 import type { IntentDirection } from "../domain/IntentDeclaration";
@@ -127,7 +127,7 @@ export const messages = {
   },
 
   newspaper: {
-    title: (turn: number) => `辺境日報\u3000第${turn}年`,
+    title: (turn: number) => `辺境日報\u3000第${turn}年の暮れ`,
     headline: {
       neutral: { up: (p: string) => `${p}、増加`, down: (p: string) => `${p}、減少`, flat: (p: string) => `${p}、横ばい` },
       euphemism: { up: (p: string) => `${p}、増加`, down: (p: string) => `${p}、わずかに調整`, flat: (p: string) => `${p}、安定` },
@@ -174,6 +174,123 @@ export const messages = {
     aidesFull: "これ以上側近を置けません",
     unknownCandidate: "その者は候補にいません",
     unknownAide: "その者は側近にいません",
+  },
+
+  factions: {
+    development: "開発派",
+    commerce: "商業派",
+    conservative: "保守派",
+    military: "軍事派",
+    environment: "環境派",
+  } satisfies Record<Faction, string>,
+
+  specialties: {
+    infrastructure: "インフラ",
+    economy: "経済",
+    security: "治安",
+    environment: "環境",
+  } satisfies Record<Specialty, string>,
+
+  ui: {
+    title: "勅令都市",
+    year: (turn: number) => `第${turn}年`,
+    politicalCapital: "政治資本",
+    newGame: "新しく始める",
+    newGameConfirm: "今の領地を捨てて始め直しますか？",
+    confirm: "始め直す",
+    cancel: "やめる",
+    exportLog: "記録を書き出す",
+    loading: "書類を広げています…",
+    panels: {
+      newspaper: "新聞",
+      map: "領地図",
+      aides: "側近",
+      decree: "勅令",
+    },
+    newspaper: {
+      firstIssueTitle: "辺境日報\u3000創刊号",
+      firstIssueHeadline: "新領主、着任",
+      firstIssueBody: "辺境の村に新たな領主が着任した。村人は百二十人ほど。暮らしぶりは可もなく不可もない。",
+      biasNote: "※本紙の記事は記者の取材によるもので、数値には誤差を含みます",
+    },
+    map: {
+      legend: {
+        office: "役所",
+        road: "道路",
+        residential: "住宅",
+        market: "市場",
+        empty: "空き地",
+        cracked: "見かけ倒し（報告で判明）",
+      },
+      note: "区画は役人が自動で割り振る。位置は指定できない",
+    },
+    aides: {
+      params: { loyalty: "忠誠", ability: "能力", ambition: "野心", trust: "信頼" },
+      factionSpecialty: (faction: string, specialty: string) => `${faction}・専門 ${specialty}`,
+      noReport: "まだ報告はない",
+      dismiss: "解任する",
+      dismissConfirm: "本当に解任する",
+      appointHeading: "任命できる者",
+      appoint: (cost: number) => `任命する（政治資本${cost}）`,
+      empty: "側近が一人もいない。勅令を執り行う者がいない。",
+      seatOpen: "空席がある。候補から任命できる。",
+    },
+    decree: {
+      placeholder: "例：道を造れ",
+      remaining: (n: number) => `残り ${n} 字`,
+      tagTarget: "対象",
+      tagScale: "規模",
+      tagNone: "なし",
+      tagCost: (n: number) => `タグは1つ${n}字`,
+      marginLabel: "余白の書き添え（任意）",
+      intentPrefix: "意図：",
+      intentParticle: "を",
+      intentNone: "書き添えない",
+      intentValuePlaceholder: "数",
+      stamp: "勅",
+      stampLabel: "判を押す",
+      thinking: "参謀が思案している…",
+      cost: (pc: number, treasury: number) => `判を押すと 政治資本-${pc}・国庫-${treasury}`,
+      noAideWarning: "側近がいないため、勅令は執行されない",
+      noCapital: "政治資本が足りない。来年まで待つか、側近の任免を控えよ",
+    },
+    result: {
+      heading: (turn: number) => `第${turn}年の顛末`,
+      flip: "めくる",
+      back: "戻す",
+      close: "机に戻る",
+      sheetOf: (i: number, n: number) => `${i} / ${n}`,
+      decreeQuote: (text: string) => `「${text}」`,
+      fieldMagnitude: "規模",
+      fieldTarget: "対象",
+      fieldEffect: "効果",
+      fieldBudget: "予算",
+      noInterpretation: "勅令は誰にも届かなかった",
+      facilities: {
+        office: "役所が建った",
+        market: (n: number) => `市場が${n}つ増えた`,
+        housing: (n: number) => `住宅区画が${n}増えた`,
+      },
+      noChange: "目に見える変化はない",
+      memo: "余白の覚え書き",
+    },
+    ending: {
+      gameoverTitle: "終幕",
+      successTitle: "町へ",
+      timeoutTitle: "時は尽きた",
+      turns: (n: number) => `治世 ${n} 年`,
+      restart: "もう一度治める",
+      lastWords: {
+        population: "最後の一家が去り、門は閉ざされた。",
+        treasury: "金庫は空になり、役人たちは去った。",
+        happiness: "民はもう領主の言葉を聞かない。",
+        success: "人は集い、道は通じ、役所に灯がともった。村はもう村ではない。",
+        timeout: "五十年が過ぎた。村は村のままだった。",
+      },
+    },
+    errors: {
+      unexpected: "書類が乱れた。もう一度判を押してほしい",
+    },
   },
 
   /** テンプレートパーサーの語彙（DECISIONS D-35）。先に書いたものが優先 */
