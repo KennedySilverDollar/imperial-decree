@@ -183,3 +183,19 @@ P1 の指示（「Phase 0 の承認済み内容に従って実装」）を受け
 | ID | 論点 | 決定 | 状態 |
 |----|------|------|------|
 | O-01 | パッケージ管理ツール | **npm に統一**（ユーザー指示）。`package-lock.json` をコミットし、`package.json` の `packageManager` を `npm@10.9.4` にする。直接依存のバージョンは pnpm 時代のロックと同一であることを確認済み（effect 3.22.4 / phaser 4.2.1 / typescript 5.9.2 ほか全件一致）。スクリプト引数は `npm run sim -- 500` のように `--` の後に書く | 承認（ユーザー指示） |
+
+---
+
+## 10. P3（LLM 接続）で決めたこと
+
+| ID | 論点 | 決定 | 状態 |
+|----|------|------|------|
+| L-01 | **実 LLM での確認ができていない** | この作業環境のネットワーク設定で `api.mistral.ai` への接続が拒否され（`docs.mistral.ai` も同様）、API キーもないため、Mistral 本体との通信は未確認。プロキシ・クライアントは単体テストとローカルの偽 Mistral（`scripts/fake-mistral.mjs`）で検証した。§4 の「Structured Outputs の minimum/maximum 対応」「価格」も**引き続き未確認**。初回の確認手順は `docs/DEPLOY.md` §1 のチェックリスト | **未確認** |
+| L-02 | JSON Schema の minimum/maximum | 既定では付けない（`SCHEMA_INCLUDE_RANGES=false`）。範囲はクライアントで clamp（P-03）。対応が確認できたら `true` に切り替える | 記録のみ |
+| L-03 | プロキシが受け付けるリクエスト | `POST /v1/decree`、ボディは `{ text, tags }` のみ。それ以外のキー（`schema`, `response_format`, `model`, `messages` など）は 400。タグも許可リストで検証。本文200字・ボディ4KB まで。トークンは定数時間比較。シークレット未設定なら 500（開いたままにしない）。Origin は `ALLOWED_ORIGINS` に限定 | 記録のみ |
+| L-04 | システムプロンプト | 翻訳タスクの定義と語彙（action 6種・target 8種）だけを英語で書く（モデル向けのプロトコル定義で、プレイヤーには表示しないため i18n の対象外）。勅令はユーザーメッセージに `{"decree": …, "tags": …}` の JSON として入れる。ゲーム状態は渡さない（A-09） | 記録のみ |
+| L-05 | フォールバックの順序 | ① プロキシ内で json_schema（strict）→ 上流が 400/422 なら json_object ② クライアントはタイムアウト5秒・リトライ2回 ③ だめならテンプレートパーサー。**レート制限（429）と認証・形式の拒否（4xx）は再試行しない**（新しい理由 `rateLimited` / `rejected`）。ローカル試験で Bot が毎分20回の上限に掛かり、リトライが上限をさらに消費していたため | 記録のみ |
+| L-06 | 呼び出しログ | Worker の `console.log`（`wrangler tail` で見る）。勅令本文は記録しない（ステータス・所要時間・文字数・タグ数・モードのみ）。フロントの KPI ログには `session.start` に `llmMode`（proxy / mock）を追加 | 記録のみ |
+| L-07 | `npm audit` の警告（wrangler のローカル開発サーバーが使う undici / miniflare、計3件） | 配布物には含まれないため許容。提示される修正は wrangler の大幅なダウングレードなので適用しない | 記録のみ |
+| L-08 | 障害の模擬 | プロキシの `FAULT_MODE`（timeout / invalid_json / schema_violation / upstream_error）。`ENVIRONMENT=development` のときだけ有効 | 記録のみ |
+| L-09 | レート制限の実装 | isolate ごとのメモリで数える固定ウィンドウ（毎分20回）。身内テストには十分だが厳密ではない。公開範囲を広げるときに置き換える（DEPLOY.md §4） | 記録のみ |

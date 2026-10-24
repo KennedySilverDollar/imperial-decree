@@ -131,6 +131,9 @@ const retrySchedule = Schedule.exponential(Duration.millis(LLM_BACKOFF_BASE_MS))
   Schedule.intersect(Schedule.recurs(LLM_MAX_RETRIES)),
 );
 
+/** レート制限・認証拒否は再試行しても変わらず、制限を余計に消費するだけなので再試行しない */
+const isRetryable = (error: LLMError): boolean => error.reason !== "rateLimited" && error.reason !== "rejected";
+
 export const parseDecree = (decree: Decree): Effect.Effect<Interpretation, never, LLMService | LogService> =>
   Effect.gen(function* () {
     const llm = yield* LLMService;
@@ -147,7 +150,7 @@ export const parseDecree = (decree: Decree): Effect.Effect<Interpretation, never
       Effect.tapError((error) => logger.log({ event: "llm.attemptFailed", data: { reason: error.reason } })),
     );
 
-    const result = yield* Effect.either(Effect.retry(attempt, retrySchedule));
+    const result = yield* Effect.either(Effect.retry(attempt, { schedule: retrySchedule, while: isRetryable }));
     if (Either.isRight(result)) {
       return {
         intent: result.right.intent,

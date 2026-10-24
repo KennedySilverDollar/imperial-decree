@@ -77,6 +77,8 @@ export const messages = {
       network: "参謀に連絡がつかなかった",
       invalidJson: "参謀の返答が読めなかった",
       schemaViolation: "参謀の返答が形式に合わなかった",
+      rateLimited: "参謀は多忙で、取り次がれなかった",
+      rejected: "参謀への取り次ぎを断られた",
     } satisfies Record<LLMFailureReason, string>,
     metaRemoved: "不遜な文言は取り除かれた",
     clamped: (fields: readonly string[]) => `範囲外の値を丸めた（${fields.join("・")}）`,

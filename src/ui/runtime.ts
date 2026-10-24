@@ -5,17 +5,25 @@ import type { IntentDeclaration } from "../domain/IntentDeclaration";
 import { LLMServiceTemplateMock } from "../engine/MockLLM";
 import { logKpi, type KpiEvent } from "../engine/Telemetry";
 import { appoint, appointmentCandidates, dismiss, newGame, playTurn, type TurnError } from "../engine/TurnMachine";
+import { LLMServiceProxy } from "../services/LLMServiceProxy";
 import { LogServiceLocalStorage, readStoredLog } from "../services/LogService";
 import { RngLive } from "../services/Rng";
 import { SaveService, SaveServiceLocalStorage } from "../services/SaveService";
 
 // UI と TurnMachine の橋渡し（CLAUDE.md §4-5）。UI はゲームロジックを持たず、ここを呼ぶだけ。
-// LLM は P2 ではモック（テンプレートパーサー）。P3 でプロキシ経由の本番実装に差し替える。
+// 参謀：VITE_LLM_PROXY_URL と VITE_LLM_PROXY_TOKEN があればプロキシ経由の Mistral、なければモック（テンプレート解釈）。
 
 const storage = window.localStorage;
 
+const proxyUrl = import.meta.env.VITE_LLM_PROXY_URL;
+const proxyToken = import.meta.env.VITE_LLM_PROXY_TOKEN;
+export const llmMode: "proxy" | "mock" = proxyUrl && proxyToken ? "proxy" : "mock";
+
+const llmLayer =
+  proxyUrl && proxyToken ? LLMServiceProxy({ baseUrl: proxyUrl, token: proxyToken }) : LLMServiceTemplateMock;
+
 const layer = Layer.mergeAll(
-  LLMServiceTemplateMock,
+  llmLayer,
   // Rng の状態は playTurn が GameState.rngState から毎ターン復元するので、ここの seed は使われない
   RngLive(0),
   SaveServiceLocalStorage(storage),

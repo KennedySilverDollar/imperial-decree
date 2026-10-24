@@ -89,6 +89,12 @@ describe("DecreeParser：フォールバック（タイムアウト5秒・リト
     expect(result).toMatchObject({ source: "template", fallbackReason: "network" });
   });
 
+  it.each(["rateLimited", "rejected"] as const)("%s は再試行せず、すぐテンプレートへ", async (reason) => {
+    const { result, calls } = await runWith(() => Effect.fail(new LLMError({ reason })));
+    expect(calls).toHaveLength(1);
+    expect(result).toMatchObject({ source: "template", fallbackReason: reason });
+  });
+
   it("リトライ中に回復すれば LLM の出力を採用する", async () => {
     let n = 0;
     const { result, calls } = await runWith(() => (++n < 3 ? Effect.succeed("oops") : Effect.succeed(valid)));
