@@ -136,3 +136,24 @@ AMENDMENT の10項目は `docs/SPEC_AMENDMENT_v3.1.md` に保存し、BALANCE.md
 | N-10 | A-07：縮小率の表示と、縮小後の効果が1未満になる場合 | — | 縮小率は整数%で表示。縮小後の効果量が最小単位（0.01）未満なら「予算不足で何もできなかった」と報告 | RuleEngine, messages | 記録のみ |
 | N-11 | A-10：Phaser の範囲 | — | `~4.2.1`、Effect `~3.22.4`、TypeScript `5.9.2`（完全固定）で適用済み。D-56 の記述は A-10 に合わせて承認済みとした | package.json | 記録のみ |
 | N-12 | A-02：試算で、歪みを無効にすると到達率が下がる（73%→56%）。現在の歪み式は平均難度を上げず、ばらつきを作る側に効く | — | 現状のまま P1 の sim で再検証。歪みを難度の主レバーにする必要はない（難度の主レバーは `TAX_PER_CAPITA` と `INFRA_UPKEEP_PER_POINT`） | AideInterpreter, BALANCE | 記録のみ |
+
+---
+
+## 7. P1 実装で決めた細部（記録のみ）
+
+P1 の指示（「Phase 0 の承認済み内容に従って実装」）を受け、§6 で「未承認」だった N-01〜N-08 は**推奨案で実装した**。異論があれば差し戻してください。以下は実装中に推奨案の範囲で決めた細部。
+
+| ID | 論点 | 決定 | 影響範囲 |
+|----|------|------|----------|
+| I-01 | `domain/` は Effect 非依存（CLAUDE.md §4-4）なので、SPEC §11.4 の `Option<T>` が使えない | `domain/` の型では `T \| null` を使う（`ending`, `intentDeclaration` など） | domain 全般 |
+| I-02 | 隠蔽（SPEC §6.4）を3段表示の「側近による補正」に出すと、隠蔽の意味がなくなる | 隠蔽は**3段表示に出さない**。`AideReport.concealed` / `hiddenItems` に分析用として記録し、UI では使わない | AideInterpreter, ResultView, P2 の UI |
+| I-03 | 骨抜きが固定コストの施設（役所・市場）に掛かった場合 | 固定コストの施設には効果倍率を掛けない（建つか建たないか） | RuleEngine |
+| I-04 | 側近報告を出すのは誰か | **在任中の側近全員**が毎ターン報告する（隠蔽・欠落は側近ごとに判定）。執行メモ（予算縮小・不成立など）は担当側近の報告にだけ載る。空洞は能力70以上の側近なら誰でも開示する | AideInterpreter |
+| I-05 | 任命候補の生成と乱数系列 | `seed` とターン番号から**派生した Rng** で選ぶ（本系列を消費しない。何度呼んでも同じ候補）。プールは候補6人＋解任済みの初期側近から、現職を除いたもの | TurnMachine.appointmentCandidates |
+| I-06 | 新聞の掲載項目と見出し | 5パラメータすべてを掲載。見出しは前年比の変化率が最も大きい項目。論調の偏りは変化があった項目にだけ掛かる | Newspaper |
+| I-07 | LLM のリトライ | 試行ごとにサービスを呼び直す（`Effect.suspend`）。スキーマに無い余分なフィールドもスキーマ違反として扱う（プロキシの `additionalProperties: false` に合わせる） | DecreeParser |
+| I-08 | 浮動小数の誤差で人口が1人減る（120×1.025 = 122.999…） | 人口の切り捨ては微小な補正を入れてから行う（`stableFloor`） | domain/math, RuleEngine |
+| I-09 | セーブデータの検証範囲 | `schemaVersion` の一致のみ確認する（GameState 全体のスキーマ検証はしない。改ざんへの耐性は P0 では求めない） | SaveService |
+| I-10 | `pnpm sim` での LLM | Bot が選んだ DecreeIntent をそのまま返すモック。テンプレートパーサーと文言は通らない | scripts/sim.ts |
+| I-11 | LLM の `budget` が負 | 0 に clamp し、clamp したことを3段表示に出す | DecreeParser |
+| I-12 | 3段表示のデータ | `engine/ResultView.ts` の `buildThreeTierView(record)` で構造化データを取り出し、`renderThreeTier` で messages.ts の文言に変換する | ResultView, P2 の UI |
