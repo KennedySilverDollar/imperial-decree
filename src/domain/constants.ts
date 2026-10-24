@@ -148,6 +148,18 @@ export const LLM_MAX_RETRIES = 2;
 export const LLM_BACKOFF_BASE_MS = 500;
 export const LLM_TEMPERATURE = 0.2;
 
+/** モック参謀の思案時間（P2：UI 確認用。P3 で本番 LLM に置き換える） */
+export const LLM_MOCK_DELAY_MS = 600;
+
+// --- 計測ログ ---
+export const LOG_STORAGE_KEY = "imperial-decree/log";
+export const LOG_MAX_ENTRIES = 5000;
+
+// --- UI 演出 ---
+/** 判子アニメの長さ（SPEC §12.8：簡易1秒） */
+export const STAMP_ANIMATION_MS = 1000;
+export const PAPER_FADE_MS = 400;
+
 // --- セーブ ---
 export const SAVE_SCHEMA_VERSION = 1;
 export const SAVE_STORAGE_KEY = "imperial-decree/save";
