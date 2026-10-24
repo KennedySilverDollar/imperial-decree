@@ -20,7 +20,8 @@ export interface Interpretation {
   readonly fallbackReason: LLMFailureReason | null;
 }
 
-export type LLMFailureReason = "timeout" | "network" | "invalidJson" | "schemaViolation";
+/** rateLimited / rejected は再試行しても結果が変わらないので、すぐテンプレートに切り替える */
+export type LLMFailureReason = "timeout" | "network" | "invalidJson" | "schemaViolation" | "rateLimited" | "rejected";
 
 export type Distortion =
   | { readonly kind: "misread"; readonly factor: number; readonly from: number; readonly to: number }
