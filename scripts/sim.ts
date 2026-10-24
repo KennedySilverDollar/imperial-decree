@@ -1,5 +1,5 @@
 // ヘッドレスシミュレーション（CLAUDE.md §7 / A-02 / BALANCE §9）。
-// 使い方: pnpm sim [ゲーム数]
+// 使い方: npm run sim -- [ゲーム数]
 // LLM はモック：Bot が決めた DecreeIntent をそのまま「参謀の出力」として返し、検証・歪み・ルールエンジンは本番と同じ経路を通す。
 
 import { Effect, Layer } from "effect";
