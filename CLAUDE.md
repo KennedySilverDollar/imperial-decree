@@ -23,7 +23,7 @@
   - `pnpm test`：Vitest（`src/**/*.test.ts(x)`）
   - `pnpm typecheck`：`tsc -b --noEmit`
   - `pnpm lint`：ESLint。`Math.random` 禁止、`src/domain` からの effect/phaser/react import 禁止を含む
-  - `pnpm sim`：P1 で追加予定（ヘッドレスシミュレーション）
+  - `pnpm sim [ゲーム数]`：ヘッドレスシミュレーション（既定1000ゲーム×3方策）。A-02 の合否を PASS/FAIL で出力。結果は `docs/BALANCE.md` §11
 - バージョン固定（AMENDMENT A-10）：Effect `~3.22.4`、TypeScript `5.9.2`（完全固定）、Phaser `~4.2.1`。Effect 4.x は `Context.Tag` が廃止されているため使わない。理由は `docs/DECISIONS.md` D-56
 
 ## 3. ディレクトリ構成
