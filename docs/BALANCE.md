@@ -131,7 +131,7 @@ happiness  += (equilibrium - happiness) * HAPPINESS_REVERT_RATE
 | residential | build / invest | 住宅区画 `+RESIDENTIAL_UNITS_PER_MAG*m`（端数は蓄積） | `RESIDENTIAL_COST_PER_MAG*m` | no-op |
 | market | build / invest | 市場数 +1（`MARKET_MAX` まで） | `MARKET_COST`（m に依存しない） | no-op |
 | office | build | 建築条件（§5）を満たせば `officeBuilt = true` | `OFFICE_COST` | no-op |
-| tax | **tax（任意の target でも）** / reform | **増税**：国庫 `+population*LEVY_PER_CAPITA_PER_MAG*m`、幸福 `-LEVY_HAPPINESS_PER_MAG*m`（**A-08**：magnitude に比例） | 0 | **減税・施し**：国庫 `-population*LEVY_PER_CAPITA_PER_MAG*|m|`、幸福 `+RELIEF_HAPPINESS_PER_MAG*|m|` |
+| tax | **tax（任意の target でも）** / reform | **増税**：国庫 `+population*LEVY_PER_CAPITA_PER_MAG*m`、幸福 `-LEVY_HAPPINESS_PER_MAG*m`（**A-08**：magnitude に比例） | 0 | **減税・施し**：国庫 `-population*LEVY_PER_CAPITA_PER_MAG*\|m\|`、幸福 `+RELIEF_HAPPINESS_PER_MAG*\|m\|` |
 | welfare | invest / reform | 幸福 `+WELFARE_HAPPINESS_PER_MAG*m` | `WELFARE_COST_PER_MAG*m` | no-op |
 | security | invest / reform | 汚職 `-SECURITY_CORRUPTION_PER_MAG*m`、幸福 `+SECURITY_HAPPINESS_PER_MAG*m` | `SECURITY_COST_PER_MAG*m` | no-op |
 | （任意） | appoint / dismiss | no-op（P0 は手動介入のみ。DECISIONS D-04） | 0 | — |
@@ -229,8 +229,8 @@ accuracy = clamp(ACCURACY_BASE + ability / ACCURACY_ABILITY_DIVISOR
 | `OFFICE_COST` | 400 | 約3年分の税収。目標直前に貯める判断を強いる |
 | `OFFICE_MIN_POPULATION` | 200 | 人口が育つ前の早期決着を防ぐ |
 | `OFFICE_MIN_INFRASTRUCTURE` | 15 | 道路の通っていない村に役所は建たない |
-| 不成立時 | 国庫・パラメータ変化なし（政治資本と `DECREE_BASE_COST` は消費）。理由を側近報告で返す（A-07 の縮小表記と同じ欄） |
-| 建設後 | `OFFICE_UPKEEP`。地図に役所1区画（SPEC §8.2） |
+| 不成立時 | — | 国庫・パラメータ変化なし（政治資本と `DECREE_BASE_COST` は消費）。理由を側近報告で返す（A-07 の縮小表記と同じ欄） |
+| 建設後 | — | `OFFICE_UPKEEP`。地図に役所1区画（SPEC §8.2） |
 
 ## 6. 地図・見た目と実態
 
