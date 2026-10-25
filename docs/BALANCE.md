@@ -2,7 +2,7 @@
 
 | 項目 | 内容 |
 |------|------|
-| ステータス | **初期案（未承認）**。AMENDMENT で決定済みの値は「**A-xx**」と明記 |
+| ステータス | §0〜§11 は **v3.1 モデル（実装済み）**。**§12〜§20 は v3.2 モデルの初期案（未承認・未実装）**。v3.2 承認後の P1 で §12 以降に置き換える |
 | 対象 | SPEC v3.0 §7 / §6.4 / §8.2 ＋ `SPEC_AMENDMENT_v3.1.md` |
 | 目標（A-02） | **ヒューリスティック方策 sim の到達率 70〜90%（主指標）**、ゲームオーバー率 20〜40%。ランダム勅令 sim は参考値（合否に使わない）。人間の初見到達率 50〜70% は P4 で実測 |
 
@@ -340,3 +340,205 @@ LLM_TIMEOUT_MS=5000  LLM_MAX_RETRIES=2  LLM_BACKOFF_BASE_MS=500  LLM_TEMPERATURE
 - **ヒューリスティックの GO はほぼ全て財政破綻**。A-08 の幸福度・人口経路はランダム方策でのみ約9%発生する。人間のプレイで発生するかは P4 で確認する。
 - ノイズなしのヒューリスティックはほぼ全勝（99.6%）。難度の大半は「誤った勅令を出すこと」（ノイズ＝情報の不確かさの代理）から来ている。実プレイの難しさは新聞ノイズ・報告の隠蔽/欠落・LLM の解釈揺れに依存するため、人間の到達率（目標50〜70%）は P4 で実測するまで分からない。
 - 実行時間：3方策×1000ゲームで約40秒。
+
+
+---
+
+# 第2部　v3.2 モデルの初期案（未承認・未実装）
+
+`docs/SPEC_v3.2.md`（建物17＋政策3・派生指標・新聞 v2）に合わせた初期案。論点の結論は DECISIONS.md §11 の推奨案を前提にしている（承認で変わりうる）。
+試算は使い捨ての Python スクリプト（リポジトリ外。新聞は含まない簡略モデル）で行い、正式な検証は P1 の `npm run sim` で取り直す。
+表中の記事番号は v3.2 §1.3 の記事タイプ（**記事N-xx**。DECISIONS の論点番号 N-xx とは別物）。
+
+## 12. 単位と課金タイミング（V-14 / V-06）
+
+| 項目 | 決定案 | 根拠 |
+|------|--------|------|
+| 「税+N」 | **毎ターン（1年）**の国庫収入。建物1棟ごと（空洞の建物は0） | v3.2 §5 #14 の推奨 |
+| 「維持費N」 | **毎ターン**の国庫支出。建物1棟ごと（空洞でも払う） | 同上。空洞は「金だけ食う」 |
+| 建設費 | **建てたターンに一括**（勅令の執行時、自然変化の前） | 現行の効果適用と同じ順序 |
+| 維持費の開始 | 建てたターンから払う | 単純化 |
+| 「幸福+N」 | 建物が**ある間ずっと**、幸福度の平衡点に加算（1回きりの増減ではない） | 1回きりだと平衡点への回帰で数年で消え、建物の性格（長屋は住みにくい等）が表れない |
+| 幸福への寄与の人口補正 | 建物の幸福寄与の合計 × `HAPPINESS_REF_POP / max(HAPPINESS_REF_POP, 人口)` | 同じ寺院1つでも、人が増えれば一人あたりの効き目は薄れる（建物を積むだけで幸福が青天井になるのを防ぐ） |
+| 「インフラ+3」（道路） | 1本ごとに台帳のインフラを +3（ストック。劣化は従来どおり） | 道路は「数える建物」ではなく、インフラ台帳を増やす事業として扱う（DECISIONS W-04） |
+| 道路の税・維持費 | 地図上の道路タイル数（`floor(インフラ/5)`、最大20）× 税2・維持費1 | 道路の数と台帳のインフラを二重管理しないため |
+
+## 13. 初期状態（V-02：開始直後に記事N-05/06/14 を発火させない）
+
+| 定数 | 値 | 根拠 |
+|------|----|------|
+| `INITIAL_BUILDINGS` | 住宅7・農地3・井戸1・見張り塔1（他は0） | 下の派生指標がすべて閾値を超える最小構成 |
+| 初期の台帳 | 人口120・国庫500・幸福度50・インフラ10・汚職率5・政治資本3 | v3.0 §7.1 / A-01 のまま |
+
+開始時の派生指標（試算で確認）：
+
+| 派生指標 | 式（クランプ前） | 開始時 | 1年目（何もしない場合） | 発火条件 |
+|----------|------------------|--------|--------------------------|----------|
+| 住宅容量 | 20×住宅 + 35×長屋 + 10×屋敷 | 140 | 140（人口124） | 記事N-05：人口 > 容量 → **発火しない** |
+| 食料 | 4×農地 + 2×倉庫 | 12 | 12（需要10.3） | 不足判定は §15 |
+| 衛生 | 3×井戸 + 2×診療所 − 2×工房 − 過密 | 3 | 3 | 記事N-06：衛生 < 3 → **発火しない** |
+| 治安 | 3×見張り塔 + 4×牢屋 + 2×寺院 + 治安政策 − 過密 | 3 | 3 | 記事N-14：治安 < 3 → **発火しない** |
+| 行政能力 | 1×役所 + 0.5×学校 | 0 | 0 | — |
+
+注意：衛生・治安は**ちょうど閾値**で始まる。工房1つ・長屋1つ・過密（人口が容量を50超える）だけで下回る。これは「建物のトレードオフがすぐ効く」意図どおりの緊張だが、試遊で厳しすぎれば `SANITATION_BASE` / `SECURITY_BASE`（既定0）を足して緩める。
+
+## 14. 建物（V-06：建設数・前提・用地）
+
+### 14.1 magnitude → 建設数
+
+```
+建設数 = min(MAX_BUILD_PER_DECREE, max(1, ceil(magnitude / MAGNITUDE_PER_BUILDING)))   ※ magnitude > 0 のとき
+```
+
+| 定数 | 値 | 根拠 |
+|------|----|------|
+| `MAGNITUDE_PER_BUILDING` | 34 | 規模タグ 小(25)→1棟、中(50)→2棟、大(80)→3棟 |
+| `MAX_BUILD_PER_DECREE` | 3 | 1回の勅令で建つのは最大3棟。「長屋を三つ」は参謀が magnitude ≈ 99 に訳す（システムプロンプトで「n 棟なら magnitude = 33n」と指示） |
+| 役所 | 最大1（2棟目は「すでにある」で no-op） | v3.2 §2.6「1区画固定」 |
+
+### 14.2 予算・用地による縮小（A-07 の拡張）
+- 建設数は **国庫で買える棟数**（`floor(国庫 / 建設費)`）と **空き用地**まで減らす。減ったことは「側近による補正」に「予算不足のため3棟→1棟」と出す。
+- 0棟になったら no-op（国庫は消費しない）。役所は1棟なので、買えなければ不成立（A-07 と同じ結果）。
+
+| 定数 | 値 | 根拠 |
+|------|----|------|
+| `BUILDING_TILE_CAPACITY` | 80 | 100区画のうち道路の最大20区画を予約。建物は残り80区画まで（V-07） |
+
+### 14.3 建物表（v3.2 §2.3 の値。調整は全体倍率で行う）
+
+| 建物 | 建設費 | 維持費/年 | 税/年 | 幸福 | 派生 | 前提 | 空洞化の対象 |
+|------|--------|-----------|-------|------|------|------|--------------|
+| 住宅 residential | 100 | 2 | 0 | +1 | 容量+20 | — | |
+| 長屋 tenement | 80 | 1 | 0 | −2 | 容量+35、衛生−2 | — | |
+| 屋敷 manor | 250 | 3 | 5 | −3 | 容量+10 | 人口≥200 | |
+| 道路 road | 80 | （タイル1） | （タイル2） | — | インフラ+3 | — | |
+| 井戸 well | 60 | 1 | 0 | +2 | 衛生+3 | — | |
+| 倉庫 granary | 120 | 2 | 0 | 0 | 食料+2 | — | ✓ |
+| 市場 market | 150 | 2 | 4 | +1 | — | — | ✓ |
+| 農地 farm | 70 | 1 | 1 | 0 | 食料+4 | — | |
+| 工房 workshop | 120 | 2 | 3 | −1 | 衛生−2 | — | ✓ |
+| 役所 office | 300 | 5 | 0 | 0 | 行政+1 | 最大1 | |
+| 徴税所 taxoffice | 100 | 1 | 5 | −3 | — | — | |
+| 裁判所 courthouse | 200 | 3 | 0 | +2 | 汚職−3/年 | 役所 | |
+| 診療所 clinic | 120 | 2 | 0 | +2 | 衛生+2 | — | ✓ |
+| 学校 school | 180 | 3 | 0 | +1 | 行政+0.5（`SCHOOL_ADMIN_DELAY_TURNS` 後） | — | ✓ |
+| 寺院 temple | 150 | 2 | 0 | +3 | 治安+2 | — | |
+| 見張り塔 watchtower | 100 | 2 | 0 | 0 | 治安+3 | — | |
+| 牢屋 jail | 150 | 2 | 0 | −2 | 治安+4 | 見張り塔 | |
+
+| 定数 | 値 | 根拠 |
+|------|----|------|
+| `BUILD_COST_MULTIPLIER` | 1.0 | v3.2 §2.8 のレバー（±50%） |
+| `UPKEEP_MULTIPLIER` | 1.5 | 同上の上限。1.0 では財政がほぼ破綻せず（試算 GO 7%）、時間切れが増えるだけだった |
+| `SCHOOL_ADMIN_DELAY_TURNS` | 5 | 「行政能力+0.5（長期）」。建ててから5年後に効く |
+| `ADMIN_ACCURACY_PER_POINT` / `ADMIN_ACCURACY_MAX` | 0.05 / 0.15 | v3.2 §2.5。側近の精度に加算。行政能力は**勅令の時点の建物**から計算する＝建てた翌年から効く（v3.2 §4 #4） |
+
+## 15. 派生指標の効果（V-05：食料・治安・衛生が幸福度/人口に与える効果）
+
+派生指標はすべて `max(0, …)` でクランプし、判定もクランプ後の値で行う（V-04）。過密 = `max(0, (人口 − 住宅容量) / 50)`。
+
+| 状態 | 判定 | 幸福度（平衡点へのペナルティ） | 人口 | 定数 |
+|------|------|-------------------------------|------|------|
+| 住宅不足（A-08） | 人口 > 住宅容量 | −3/年 | 増えず、超過分の15%が流出 | `CROWDING_HAPPINESS_PENALTY`=3、`OVERCROWD_OUTFLOW_RATE`=0.15 |
+| 食料不足 | 食料 < 人口 / `PEOPLE_PER_FOOD` | −15 × 不足率/年 | 増えず、15% × 不足率が流出 | `PEOPLE_PER_FOOD`=12、`FAMINE_HAPPINESS_PENALTY`=15、`FAMINE_OUTFLOW_RATE`=0.15 |
+| 衛生不良 | 衛生 < 3 | −3/年 | 毎年2%流出（疫病） | `SANITATION_LOW`=3、`SANITATION_PENALTY`=3、`DISEASE_OUTFLOW_RATE`=0.02 |
+| 治安不良 | 治安 < 3 | −3/年 | — | `SECURITY_LOW`=3、`SECURITY_PENALTY`=3 |
+| 汚職の放置（A-08） | 汚職率 > 50 | −3/年 | — | v3.1 のまま |
+
+不足率 = (需要 − 食料) / 需要。閾値は新聞のトリガー（記事N-06/14 の `<3`）と同じ値にそろえ、「新聞が騒ぐ＝実害が出ている」が一致するようにした。
+
+幸福度の平衡点：
+
+```
+平衡点 = HAPPINESS_EQUILIBRIUM_BASE
+       + Σ(建物の幸福 × 棟数) × HAPPINESS_REF_POP / max(HAPPINESS_REF_POP, 人口)
+       + インフラ × HAPPINESS_PER_INFRA − 汚職率 × 0.2
+       + 政策の効果（§16） − ペナルティ（上表） / 0.1
+```
+
+| 定数 | 値 | 根拠 |
+|------|----|------|
+| `HAPPINESS_EQUILIBRIUM_BASE` | 45 | 初期建物の幸福寄与（+9）・インフラ（+2）・汚職（−1）と合わせて開始時の平衡点 ≈ 55。人口がゆっくり増え始める |
+| `HAPPINESS_PER_INFRA` | 0.2 | v3.1 の 0.4 から半減（幸福の主な出どころを建物に移したため） |
+| `HAPPINESS_REF_POP` | 120 | 開始時の人口で補正1 |
+| `POPULATION_GROWTH_BASE` | 0.04 | v3.1 の 0.03 から上げる。建物を建てる手間が増えた分、自然増で時間切れを減らす |
+| `TAX_PER_CAPITA` | 1.1 | 人頭税。建物の税と合わせて試算で決めた |
+
+## 16. 政策3種（未決 §4 #6）
+
+政策は「建てる」ものではなく**水準**（−2〜+2、初期0）を持つ。勅令で ±1（規模が大きければ ±2）動かす。最後の勅令から `POLICY_DURATION_TURNS` 年続き、その後は毎年1段階ずつ0に戻る。
+
+| 政策 | +1段階あたりの効果（毎年） | −1段階あたり | 定数 |
+|------|---------------------------|--------------|------|
+| 税率 tax_rate | 人頭税 +15%、幸福の平衡点 −3。**上げた瞬間に幸福 −2/段階**（A-08「増税で幸福ペナルティ」） | 人頭税 −15%、幸福 +3 | `TAX_RATE_INCOME_PER_LEVEL`=0.15、`TAX_RATE_HAPPINESS_PER_LEVEL`=3、`TAX_RATE_SHOCK_PER_LEVEL`=2 |
+| 福祉政策 welfare_policy | 幸福の平衡点 +3、国庫 −0.12×人口 | 国庫の支出なし、幸福 −3 | `WELFARE_HAPPINESS_PER_LEVEL`=3、`WELFARE_COST_PER_CAPITA_PER_LEVEL`=0.12 |
+| 治安政策 security_policy | 治安 +2、幸福の平衡点 −1.5、国庫 −10 | 治安 −2、幸福 +1.5 | `SECURITY_POLICY_SECURITY_PER_LEVEL`=2、`SECURITY_POLICY_HAPPINESS_PER_LEVEL`=1.5、`SECURITY_POLICY_COST_PER_LEVEL`=10 |
+
+| 定数 | 値 | 根拠 |
+|------|----|------|
+| `POLICY_LEVEL_MAX` | 2 | 両方向に2段階。極端な政策を続けるには勅令を出し続ける必要がある |
+| `POLICY_DURATION_TURNS` | 4 | 一度の勅令で4年効く。放っておけば戻る（勅令1回の価値を建物とおおむね釣り合わせる） |
+| `POLICY_LARGE_MAGNITUDE` | 60 | これ以上の規模なら ±2 段階 |
+
+## 17. 汚職による空洞化（未決 §4 #5）
+
+| 項目 | 決定案 | 定数 |
+|------|--------|------|
+| 対象建物 | **倉庫・市場・工房・診療所・学校**（外から使われているか見えにくい建物）。住宅・道路・井戸・農地・役所・治安系は対象外 | `HOLLOWABLE_BUILDINGS` |
+| 発生 | 建てた1棟ごとに、確率 `min(HOLLOW_MAX_CHANCE, 汚職率/100)` で空洞になる | `HOLLOW_MAX_CHANCE`=0.3（v3.2 §2.8 の上限） |
+| 骨抜き（歪み）との統合 | 骨抜きされた建設は、建てた棟数の半分（端数は確率）が空洞になる。費用は全額 | v3.1 の「効果半減・費用据え置き」を棟数で表したもの |
+| 空洞の効果 | 地図には普通に表示、維持費はかかる、効果（税・幸福・派生）はゼロ | — |
+| 露見 | 能力70以上の側近が報告で言及（`HOLLOW_DISCLOSE_ABILITY_MIN`=70）。投書（記事N-16）が「におわせ」る | v3.2 §1.8, §1.9 |
+| 修繕 | `invest` × その建物で、空洞の棟を建設費の半額で修繕（修繕が先、余りは新築） | `HOLLOW_REPAIR_COST_RATIO`=0.5 |
+
+## 18. 新聞 v2 の固定値（v3.2 §1.5〜§1.7）
+
+| 定数 | 値 | 根拠 |
+|------|----|------|
+| `NEWSPAPER_IDEOLOGICAL_BIAS` / `NEWSPAPER_CENSORSHIP` / `NEWSPAPER_BUREAUCRATIC_PRESSURE` | 30 / 20 / 10 | v3.2 §1.5 の P0 固定値 |
+| 数値のヘッジ確率 | `NEWSPAPER_IDEOLOGICAL_BIAS / 100`（=0.3） | 「bias/100」の bias は思想的偏向と解釈（DECISIONS W-07） |
+| `NEWSPAPER_MAX_ARTICLES` / `NEWSPAPER_MIN_ARTICLES` | 7 / 5 | V-10：上限7で打ち切る（優先：スレッド → 第一面 → 負の記事 → フレーバー） |
+| `NEWSPAPER_MAX_THREAD_ARTICLES` | 2 | §1.6 手順1 |
+| `NEWSPAPER_RECENT_TURNS` / `NEWSPAPER_RECENT_WEIGHT` | 3 / 0.3 | §1.6 手順3 |
+| `THREAD_MIN_TURNS` / `THREAD_MAX_TURNS` | 2 / 3 | §1.7（housing_crisis は解消まで） |
+| 記事N-04 / N-11 / N-17 の閾値 | 幸福度<40 / 汚職率>30 / 側近の野心≥70 | N-17 は A-04 と同じ理由で `>=`（W-06） |
+| 記事N-03（遷移間近） | 成功3条件のうち2つを満たし、残り1つが目標の90%以上 | 「間近」の定義（W-08） |
+| `truthfulness` | 1.0 から、ヘッジ −0.1・婉曲 −0.2・称賛転換 −0.5（下限0）。UI 非表示 | 内部保持のみ（不変条件13） |
+
+## 19. 試算結果（2026-10-25、使い捨てスクリプト、各1000本。新聞・報告・LLM は含まない）
+
+ヒューリスティック方策は v3.1 版（§9）を v3.2 の建物に置き換えたもの：幸福<45→福祉政策 / 食料が需要の1.15倍未満→農地 / 容量が人口の1.12倍未満→住宅 / 衛生<4→井戸 / 治安<4→見張り塔 / 役所なし・人口≥150・国庫≥320→役所 / 国庫<150→税率 / インフラ<26→道路 / 汚職>20かつ役所あり→裁判所 / それ以外→市場。35% はランダム勅令（20種から一様）。
+
+| 設定 | heuristic 到達 | GO | 時間切れ | ノイズなし到達 | ランダム GO |
+|------|----------------|----|----------|----------------|-------------|
+| v3.2 表の値そのまま（人頭税1.0、維持費×1.0、成長0.03） | 18% | 21% | 61% | 46% | 68% |
+| 幸福基準43・人頭税1.2・役所の判断を調整 | 79% | 8% | 13% | 100% | 54% |
+| **採用案**：基準45・成長0.04・人頭税1.1・**維持費×1.5** | **71%** | **10%** | 19% | 100% | 56% |
+| 参考：維持費×2.5・人頭税1.3（v3.2 の調整幅外） | 66% | 14〜15% | 20% | 97% | 74% |
+
+所見：
+- **A-02 の主指標（到達70〜90%）は満たすが、ゲームオーバー率（20〜40%）に届かない。** 建設は国庫に合わせて縮小される（A-07）ため、破綻は維持費の累積でしか起きない。v3.2 の調整幅（維持費±50%）の内側では GO は約10%が上限だった。GO を上げるには、(a) 維持費の倍率を調整幅の外まで上げる、(b) 予算縮小をやめて超過支出を許す、(c) GO 目標を見直す、のいずれかが要る（DECISIONS §11 の質問）。
+- ヒューリスティックの GO は財政破綻のみで、幸福度・人口経路はほぼ0%。ランダム方策でも財政破綻のみになった（v3.1 では幸福度8%）。食料・衛生の罰則を強めると増えるが、P1 で本物のエンジンを使って詰める。
+- 建物の使用分布のエントロピー（v3.2 §3.2 の KPI の試算）：ヒューリスティック 3.2bit、ノイズなし 2.5bit、ランダム 3.8bit（20種一様なら 4.3bit）。
+
+## 20. 定数一覧（v3.2 追加分。P1 で constants.ts へ）
+
+```
+INITIAL_BUILDINGS={residential:7,farm:3,well:1,watchtower:1}
+MAGNITUDE_PER_BUILDING=34  MAX_BUILD_PER_DECREE=3  BUILDING_TILE_CAPACITY=80  ROAD_TILE_MAX=20
+BUILD_COST_MULTIPLIER=1.0  UPKEEP_MULTIPLIER=1.5  ROAD_TILE_TAX=2  ROAD_TILE_UPKEEP=1  INFRA_PER_ROAD_BUILD=3
+TAX_PER_CAPITA=1.1  POPULATION_GROWTH_BASE=0.04  HAPPINESS_EQUILIBRIUM_BASE=45  HAPPINESS_PER_INFRA=0.2  HAPPINESS_REF_POP=120
+PEOPLE_PER_FOOD=12  FAMINE_HAPPINESS_PENALTY=15  FAMINE_OUTFLOW_RATE=0.15
+SANITATION_LOW=3  SANITATION_PENALTY=3  DISEASE_OUTFLOW_RATE=0.02  SECURITY_LOW=3  SECURITY_PENALTY=3
+SANITATION_BASE=0  SECURITY_BASE=0  OVERCROWD_DIVISOR=50  COURTHOUSE_CORRUPTION_PER_TURN=3
+SCHOOL_ADMIN_DELAY_TURNS=5  ADMIN_ACCURACY_PER_POINT=0.05  ADMIN_ACCURACY_MAX=0.15
+POLICY_LEVEL_MAX=2  POLICY_DURATION_TURNS=4  POLICY_LARGE_MAGNITUDE=60
+TAX_RATE_INCOME_PER_LEVEL=0.15  TAX_RATE_HAPPINESS_PER_LEVEL=3  TAX_RATE_SHOCK_PER_LEVEL=2
+WELFARE_HAPPINESS_PER_LEVEL=3  WELFARE_COST_PER_CAPITA_PER_LEVEL=0.12
+SECURITY_POLICY_SECURITY_PER_LEVEL=2  SECURITY_POLICY_HAPPINESS_PER_LEVEL=1.5  SECURITY_POLICY_COST_PER_LEVEL=10
+HOLLOW_MAX_CHANCE=0.3  HOLLOW_REPAIR_COST_RATIO=0.5  HOLLOW_DISCLOSE_ABILITY_MIN=70
+NEWSPAPER_IDEOLOGICAL_BIAS=30  NEWSPAPER_CENSORSHIP=20  NEWSPAPER_BUREAUCRATIC_PRESSURE=10
+NEWSPAPER_MAX_ARTICLES=7  NEWSPAPER_MIN_ARTICLES=5  NEWSPAPER_MAX_THREAD_ARTICLES=2  NEWSPAPER_RECENT_TURNS=3  NEWSPAPER_RECENT_WEIGHT=0.3
+THREAD_MIN_TURNS=2  THREAD_MAX_TURNS=3
+（v3.1 から廃止予定：INITIAL_HOUSING_UNITS, RESIDENTIAL_UNITS_PER_MAG, MARKET_TAX_BONUS, MARKET_MAX, *_PER_MAG 系の効果係数, OFFICE_MIN_POPULATION/INFRASTRUCTURE, NEWSPAPER_BIAS, NEWSPAPER_TONE_CHANCE）
+```
