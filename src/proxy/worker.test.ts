@@ -112,10 +112,24 @@ describe("プロキシ：リクエストからスキーマ等を受け取らな�
     expect(up.calls).toHaveLength(0);
   });
 
+  it("4種のタグをそのまま上流に渡す", async () => {
+    const tags = [
+      { kind: "target", value: "granary" },
+      { kind: "scale", value: "small" },
+      { kind: "deadline", value: "fewYears" },
+      { kind: "priority", value: "high" },
+    ];
+    const { response, up } = await call({ text: "倉を建てよ", tags });
+    expect(response.status).toBe(200);
+    const messages = up.calls[0]?.body.messages as { content: string }[];
+    expect(JSON.parse(messages[1]?.content ?? "{}")).toEqual({ decree: "倉を建てよ", tags });
+  });
+
   it.each([
     ["空の本文", { text: "  ", tags: [] }, "invalid_text"],
     ["長すぎる本文", { text: "道".repeat(201), tags: [] }, "text_too_long"],
     ["不正なタグ", { text: "道", tags: [{ kind: "deadline", value: "soon" }] }, "invalid_tags"],
+    ["不正な優先度", { text: "道", tags: [{ kind: "priority", value: "urgent" }] }, "invalid_tags"],
     ["許可外の target タグ", { text: "道", tags: [{ kind: "target", value: "castle" }] }, "invalid_tags"],
     ["タグに余計なキー", { text: "道", tags: [{ kind: "scale", value: "large", schema: {} }] }, "invalid_tags"],
     ["JSON でない", "{oops", "invalid_json"],

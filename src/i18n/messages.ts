@@ -9,7 +9,7 @@ import type { EventKind } from "../domain/Events";
 import type { Section } from "../domain/News";
 import type { LLMFailureReason, NoopReason, OrderFailure, OrderLimit } from "../domain/TurnRecord";
 import type { IntentDirection } from "../domain/IntentDeclaration";
-import type { ScaleTagValue } from "../domain/Decree";
+import type { DeadlineTagValue, PriorityTagValue, ScaleTagValue } from "../domain/Decree";
 
 const fmt = (value: number): string => String(Math.round(value));
 const signed = (value: number): string => (value > 0 ? `+${fmt(value)}` : fmt(value));
@@ -98,6 +98,8 @@ export const messages = {
   } satisfies Record<Action, string>,
 
   scaleTags: { small: "小", medium: "中", large: "大" } satisfies Record<ScaleTagValue, string>,
+  deadlineTags: { thisYear: "今年中", fewYears: "数年で", noRush: "急がず" } satisfies Record<DeadlineTagValue, string>,
+  priorityTags: { high: "高", normal: "中", low: "低" } satisfies Record<PriorityTagValue, string>,
 
   intentDirections: {
     increase: "増やす",
@@ -314,6 +316,9 @@ export const messages = {
       remaining: (n: number) => `残り ${n} 字`,
       tagTarget: "対象",
       tagScale: "規模",
+      tagDeadline: "期限",
+      tagPriority: "優先度",
+      tagHintNote: "期限・優先度は参謀への添え書き（執行には影響しない）",
       tagNone: "なし",
       tagCost: (n: number) => `タグは1つ${n}字`,
       marginLabel: "余白の書き添え（任意）",

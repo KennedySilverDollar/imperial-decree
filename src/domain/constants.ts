@@ -19,8 +19,8 @@ export const APPOINT_CANDIDATE_COUNT = 2;
 
 // --- 勅令入力 ---
 export const DECREE_CHAR_LIMIT = 40;
-export const TAG_CHAR_COST = 3;
-export const MAX_TAGS = 2;
+export const TAG_CHAR_COST = 5;
+export const MAX_TAGS = 4;
 export const SCALE_TAG_MAGNITUDE = { small: 25, medium: 50, large: 80 } as const;
 export const DEFAULT_TEMPLATE_MAGNITUDE = 50;
 export const TEMPLATE_MATCH_CONFIDENCE = 0.6;
