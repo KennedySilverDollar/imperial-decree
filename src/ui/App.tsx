@@ -1,6 +1,6 @@
 import { Either } from "effect";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { DECREE_POLITICAL_COST, POLITICAL_CAPITAL_MAX } from "../domain/constants";
+import { DECREE_POLITICAL_COST } from "../domain/constants";
 import { countTextChars, type Decree } from "../domain/Decree";
 import type { GameState } from "../domain/GameState";
 import type { IntentDeclaration } from "../domain/IntentDeclaration";
@@ -10,6 +10,7 @@ import { messages } from "../i18n/messages";
 import { AidePanel } from "./panels/AidePanel";
 import { DecreePanel } from "./panels/DecreePanel";
 import { EndingScreen } from "./panels/EndingScreen";
+import { LedgerPanel } from "./panels/LedgerPanel";
 import { MapPanel } from "./panels/MapPanel";
 import { NewspaperPanel } from "./panels/NewspaperPanel";
 import { ResultStack } from "./panels/ResultStack";
@@ -167,14 +168,6 @@ export function App() {
         <span className="year" data-testid="year">
           {ui.year(game.turn)}
         </span>
-        <span className="capital" aria-label={ui.politicalCapital}>
-          {ui.politicalCapital}
-          <span className="pips" data-testid="capital">
-            {Array.from({ length: POLITICAL_CAPITAL_MAX }, (_, i) => (
-              <span key={i} className={i < game.politicalCapital ? "pip filled" : "pip"} />
-            ))}
-          </span>
-        </span>
         <span className="spacer" />
         {confirmRestart ? (
           <span className="confirm">
@@ -196,6 +189,8 @@ export function App() {
         </button>
       </header>
 
+      <LedgerPanel params={game.params} delta={lastRecord?.actualResult ?? null} politicalCapital={game.politicalCapital} />
+
       <main className="desk-grid">
         <div className="desk-column">
           <NewspaperPanel newspaper={lastRecord?.newspaper ?? null} />
@@ -210,7 +205,10 @@ export function App() {
           />
         </div>
         <div className="desk-column">
-          <MapPanel map={map} />
+          <MapPanel
+            map={map}
+            works={game.projects.map((p) => ({ id: p.id, building: p.kind, count: p.count, repair: p.repair, orderedTurn: p.orderedTurn }))}
+          />
           <DecreePanel
             turn={game.turn}
             busy={busy}

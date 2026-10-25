@@ -81,14 +81,9 @@ describe("地図の自動導出（v3.2 §2.6 / X-03, W-09, Z-13）", () => {
     expect(deriveMap(state.params.infrastructure, state.buildings, [repair]).constructionTiles).toBe(0);
   });
 
-  it("開示された空洞の建物にだけ亀裂がつく", () => {
+  it("空洞は地図に出ない（開示されても同じ見た目。v3.2 §1.8 / I-32）", () => {
     const state = createInitialState(1);
-    const [first, second, ...rest] = state.buildings.filter((b) => b.tile !== null);
-    if (!first || !second) throw new Error("建物がない");
-    const buildings = [{ ...first, hollow: true, disclosed: true }, { ...second, hollow: true, disclosed: false }, ...rest];
-    const map = deriveMap(state.params.infrastructure, buildings, []);
-    const at = (b: typeof first) => (b.tile ? map.tiles[b.tile[1]]?.[b.tile[0]] : undefined);
-    expect(at(first)?.cracked).toBe(true);
-    expect(at(second)?.cracked).toBe(false);
+    const hollowed = state.buildings.map((b) => ({ ...b, hollow: true, disclosed: true }));
+    expect(deriveMap(state.params.infrastructure, hollowed, [])).toEqual(deriveMap(state.params.infrastructure, state.buildings, []));
   });
 });

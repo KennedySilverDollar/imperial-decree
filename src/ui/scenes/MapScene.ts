@@ -95,15 +95,5 @@ export class MapScene extends Phaser.Scene {
       case "empty":
         break;
     }
-
-    if (tile.cracked) {
-      g.lineStyle(2, color(palette.warning), 1);
-      g.beginPath();
-      g.moveTo(x + 6, y + 6);
-      g.lineTo(x + 13, y + 14);
-      g.lineTo(x + 9, y + 19);
-      g.lineTo(x + 17, y + 28);
-      g.strokePath();
-    }
   }
 }

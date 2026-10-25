@@ -8,6 +8,7 @@ import { hashString, unitFromSeed } from "./Prng";
 // 区画は発注時に決めて保存する（毎年再計算すると道路の増減で全体がずれるため）。
 // 道路は中央の十字に、floor(インフラ/5) 本だけ描く（区画を占めない）。役所は中央の決まった区画。
 // 同じカテゴリ内の位置はセーブ ID と通し番号から決まる乱数（本系列の Rng を消費しない）。
+// 空洞は地図に出さない（v3.2 §1.8「亀裂は未表示」。D-25 の亀裂アイコンを置き換え：DECISIONS I-32）。
 
 export type Coord = readonly [number, number];
 
@@ -77,8 +78,6 @@ export interface Tile {
   readonly kind: TileKind;
   readonly building: BuildingId | null;
   readonly category: Category | null;
-  /** 空洞が側近報告で開示された区画（亀裂アイコン） */
-  readonly cracked: boolean;
 }
 
 export interface MapState {
@@ -98,24 +97,24 @@ export const deriveMap = (
   projects: readonly Project[],
 ): MapState => {
   const grid: Tile[][] = Array.from({ length: GRID_SIZE }, (_, y) =>
-    Array.from({ length: GRID_SIZE }, (_, x) => ({ x, y, kind: "empty" as TileKind, building: null, category: null, cracked: false })),
+    Array.from({ length: GRID_SIZE }, (_, x) => ({ x, y, kind: "empty" as TileKind, building: null, category: null })),
   );
   const set = (t: Tile) => {
     const row = grid[t.y];
     if (row) row[t.x] = t;
   };
   const roads = roadTileCount(infrastructure);
-  ROAD_TILES.slice(0, roads).forEach(([x, y]) => set({ x, y, kind: "road", building: null, category: null, cracked: false }));
+  ROAD_TILES.slice(0, roads).forEach(([x, y]) => set({ x, y, kind: "road", building: null, category: null }));
   for (const b of buildings) {
     if (!b.tile) continue;
     const [x, y] = b.tile;
-    set({ x, y, kind: "building", building: b.kind, category: BUILDINGS[b.kind].category, cracked: b.hollow && b.disclosed });
+    set({ x, y, kind: "building", building: b.kind, category: BUILDINGS[b.kind].category });
   }
   let constructionTiles = 0;
   for (const p of projects) {
     if (p.repair) continue;
     for (const [x, y] of p.tiles) {
-      set({ x, y, kind: "construction", building: p.kind, category: BUILDINGS[p.kind].category, cracked: false });
+      set({ x, y, kind: "construction", building: p.kind, category: BUILDINGS[p.kind].category });
       constructionTiles++;
     }
   }

@@ -1,15 +1,24 @@
 import Phaser from "phaser";
 import { useEffect, useRef } from "react";
-import { CATEGORIES } from "../../domain/Buildings";
+import { CATEGORIES, type BuildingId } from "../../domain/Buildings";
 import { GRID_SIZE } from "../../domain/constants";
 import type { MapState } from "../../domain/Map";
 import { messages } from "../../i18n/messages";
 import { MAP_PIXELS, MapScene } from "../scenes/MapScene";
 import { palette } from "../theme";
 
-const PLAIN_LEGEND = ["road", "construction", "empty", "cracked"] as const;
+const PLAIN_LEGEND = ["road", "construction", "empty"] as const;
 
-export function MapPanel({ map }: { readonly map: MapState }) {
+export interface WorkItem {
+  readonly id: number;
+  readonly building: BuildingId;
+  readonly count: number;
+  readonly repair: boolean;
+  readonly orderedTurn: number;
+}
+
+// 普請中の案件は「何を発注したか」だけを出す。工期・進み具合・建材は秘匿（CLAUDE.md §4-13）。
+export function MapPanel({ map, works }: { readonly map: MapState; readonly works: readonly WorkItem[] }) {
   const host = useRef<HTMLDivElement>(null);
   const scene = useRef<MapScene | null>(null);
 
@@ -59,6 +68,18 @@ export function MapPanel({ map }: { readonly map: MapState }) {
         ))}
       </ul>
       <p className="panel-note">{messages.ui.map.note}</p>
+      <div className="works" data-testid="works">
+        <h3 className="works-title">{messages.ui.map.worksTitle}</h3>
+        {works.length === 0 ? (
+          <p className="panel-note">{messages.ui.map.noWorks}</p>
+        ) : (
+          <ul className="works-list">
+            {works.map((w) => (
+              <li key={w.id}>{messages.ui.map.work(messages.targets[w.building], w.count, w.repair, w.orderedTurn)}</li>
+            ))}
+          </ul>
+        )}
+      </div>
     </section>
   );
 }

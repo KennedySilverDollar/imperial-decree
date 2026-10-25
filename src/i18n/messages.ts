@@ -273,6 +273,17 @@ export const messages = {
     title: "勅令都市",
     year: (turn: number) => `第${turn}年`,
     politicalCapital: "政治資本",
+    ledger: {
+      title: "領主の台帳",
+      value: {
+        population: (n: number) => `${n}人`,
+        treasury: (n: number) => `${n}`,
+        happiness: (n: number) => `${n}`,
+        infrastructure: (n: number) => `${n}`,
+        corruption: (n: number) => `${n}%`,
+      } satisfies Record<ParamKey, (n: number) => string>,
+      capital: (n: number, max: number) => `政治資本 ${n}／${max}`,
+    },
     newGame: "新しく始める",
     newGameConfirm: "今の領地を捨てて始め直しますか？",
     confirm: "始め直す",
@@ -296,9 +307,12 @@ export const messages = {
         road: "道路",
         construction: "普請中",
         empty: "空き地",
-        cracked: "見かけ倒し（報告で判明）",
       },
       note: "区画は役人が自動で割り振る。位置は指定できない",
+      worksTitle: "普請中の案件",
+      noWorks: "普請中の案件はない",
+      work: (building: string, count: number, repair: boolean, orderedTurn: number) =>
+        `${building}${repair ? "の修繕" : ""}×${count}（第${orderedTurn}年に発注）`,
     },
     aides: {
       params: { loyalty: "忠誠", ability: "能力", ambition: "野心", trust: "信頼" },
