@@ -156,15 +156,6 @@ async function stageTriangulation(page) {
   await shot(page, "08-newspaper", ".newspaper");
   await readNewspaper(page);
 
-  // 任命/解任：商人を解任すると候補が並ぶ
-  await page.click("[data-testid=aide-youngMerchant] >> text=解任する");
-  await page.click("[data-testid=aide-youngMerchant] >> text=本当に解任する");
-  await page.waitForSelector(".candidate");
-  await settle(page, 400);
-  await shot(page, "09-appoint-candidates", ".aide-panel");
-  await page.locator(".candidate button").first().click();
-  await settle(page, 400);
-
   // 残りを最後まで遊ぶ
   let turn = 2;
   while (turn <= MAX_TURNS && (await page.locator("[data-testid=ending]").count()) === 0) {
@@ -187,6 +178,16 @@ async function stageTriangulation(page) {
         await shot(page, "17-triangulation-map", ".map-panel");
       }
       turn++;
+    }
+    if (turn === 10) {
+      // 任命/解任：商人を解任すると候補が並ぶ（三角測量の場面で能力の高い商人が要るので、その後に行う）
+      await page.click("[data-testid=aide-youngMerchant] >> text=解任する");
+      await page.click("[data-testid=aide-youngMerchant] >> text=本当に解任する");
+      await page.waitForSelector(".candidate");
+      await settle(page, 400);
+      await shot(page, "09-appoint-candidates", ".aide-panel");
+      await page.locator(".candidate button").first().click();
+      await settle(page, 400);
     }
     if (turn === 12) {
       await shot(page, "10-desk-midgame");
