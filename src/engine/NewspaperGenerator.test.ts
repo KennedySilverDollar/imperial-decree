@@ -18,6 +18,7 @@ const contextOf = (state: GameState, after: Partial<Params> = {}, turn = 5): New
   derived: derivedOf(state),
   buildings: state.buildings,
   projects: state.projects,
+  completed: [],
   aides: state.aides,
   event: state.event,
   materialShortage: 0,

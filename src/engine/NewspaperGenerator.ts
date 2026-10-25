@@ -1,5 +1,5 @@
 import { Effect } from "effect";
-import { TEMPLATES, VOCABULARY, type ArticleTemplateData, type ArticleText, type TriggerId } from "../content/newspaper/ja";
+import { VOCABULARY, type ArticleTemplateData, type ArticleText, type TriggerId } from "../content/newspaper/ja";
 import type { Aide } from "../domain/Aide";
 import { BUILDING_IDS, type BuildingId } from "../domain/Buildings";
 import type { Project } from "../domain/Construction";
@@ -9,6 +9,7 @@ import {
   NEWS_HEDGE_ROUNDING,
   NEWS_HIGH_CORRUPTION,
   NEWS_LOW_HAPPINESS,
+  NEWS_NEAR_TRANSITION_RATIO,
   NEWSPAPER_BUREAUCRATIC_PRESSURE,
   NEWSPAPER_CENSORSHIP,
   NEWSPAPER_IDEOLOGICAL_BIAS,
@@ -21,6 +22,8 @@ import {
   PERCENT,
   SANITATION_LOW,
   SECURITY_LOW,
+  SUCCESS_INFRASTRUCTURE,
+  SUCCESS_POPULATION,
   THREAD_MAX_TURNS,
   THREAD_MIN_TURNS,
   TRUTH_PENALTY_EUPHEMISM,
@@ -43,6 +46,7 @@ import {
 import { hashString } from "../domain/Prng";
 import { aideName, messages } from "../i18n/messages";
 import { makeRng, random, Rng } from "../services/Rng";
+import { VALIDATED_TEMPLATES as TEMPLATES } from "./NewspaperTemplates";
 
 // 決定論の新聞生成（v3.2 §1.5〜§1.7, §1.10 / CLAUDE.md §4-12）。LLM は使わない。
 // seed = hash(saveId, turn)。ゲーム本体の Rng の系列は消費しない。
@@ -55,6 +59,8 @@ export interface NewsContext {
   readonly derived: DerivedStats;
   readonly buildings: readonly BuildingInstance[];
   readonly projects: readonly Project[];
+  /** その年に完成した建物（新築のみ。記事 N-07/09/12/15 のきっかけ） */
+  readonly completed: readonly BuildingId[];
   readonly aides: readonly Aide[];
   readonly event: ActiveEvent | null;
   readonly materialShortage: number;
@@ -82,7 +88,8 @@ const SECTION_QUOTA: Readonly<Record<Section, number>> = {
   weather: 1,
 };
 
-const FLAVOR_IDS = ["N-18", "N-19"] as const;
+/** 穴埋めに使う記事タイプ（広告・天候・人口動態） */
+const FLAVOR_TYPES = ["N-18", "N-19", "N-20"] as const;
 const THREAD_TEMPLATE: Readonly<Record<ThreadKey, string>> = {
   corruption: "N-11",
   granary_hollow: "N-16",
@@ -92,10 +99,46 @@ const THREAD_TEMPLATE: Readonly<Record<ThreadKey, string>> = {
 const REPORTABLE_SHORTAGE = 0.05;
 const POPULATION_CHANGE_MIN = 1;
 
-const templateById = (id: string): ArticleTemplateData => {
-  const t = TEMPLATES.find((x) => x.id === id);
-  if (!t) throw new Error(`unknown template ${id}`);
-  return t;
+const templatesOfType = (type: string): readonly ArticleTemplateData[] => {
+  const list = TEMPLATES.filter((x) => x.type === type);
+  if (list.length === 0) throw new Error(`unknown article type ${type}`);
+  return list;
+};
+
+/** 重み付き抽選（直近3年に使ったテンプレートは重み×0.3） */
+const pickWeighted = <A extends { readonly t: ArticleTemplateData }>(
+  candidates: readonly A[],
+  recent: ReadonlySet<string>,
+): Effect.Effect<A | undefined, never, Rng> =>
+  Effect.map(random, (r) => {
+    const weights = candidates.map((x) => x.t.weight * (recent.has(x.t.id) ? NEWSPAPER_RECENT_WEIGHT : 1));
+    let u = r * weights.reduce((a, b) => a + b, 0);
+    for (let i = 0; i < candidates.length; i++) {
+      u -= weights[i] ?? 0;
+      if (u < 0) return candidates[i];
+    }
+    return candidates[0];
+  });
+
+const EDUCATION: readonly BuildingId[] = ["school", "temple"];
+const COMMERCE: readonly BuildingId[] = ["market", "workshop"];
+const SECURITY_BUILDINGS: readonly BuildingId[] = ["watchtower", "jail"];
+
+/** 遷移間近（W-08）：成功3条件のうち2つを満たし、残り1つが目標の90%以上（役所なら発注済み） */
+const nearTransition = (c: NewsContext): boolean => {
+  const office = c.buildings.some((b) => b.kind === "office");
+  const conditions = [
+    { met: c.after.population >= SUCCESS_POPULATION, close: c.after.population >= SUCCESS_POPULATION * NEWS_NEAR_TRANSITION_RATIO },
+    { met: c.after.infrastructure >= SUCCESS_INFRASTRUCTURE, close: c.after.infrastructure >= SUCCESS_INFRASTRUCTURE * NEWS_NEAR_TRANSITION_RATIO },
+    { met: office, close: c.projects.some((p) => p.kind === "office") },
+  ];
+  const unmet = conditions.filter((x) => !x.met);
+  return unmet.length === 1 && unmet[0]?.close === true;
+};
+
+const completedOf = (c: NewsContext, kinds: readonly BuildingId[]): Entities | null => {
+  const building = c.completed.find((k) => kinds.includes(k));
+  return building ? { building } : null;
 };
 
 /** 未開示の空洞の建物 */
@@ -115,6 +158,16 @@ const evaluateTrigger = (trigger: TriggerId, c: NewsContext): Entities | null =>
       return popChange >= POPULATION_CHANGE_MIN ? {} : null;
     case "populationDown":
       return popChange <= -POPULATION_CHANGE_MIN ? {} : null;
+    case "nearTransition":
+      return nearTransition(c) ? {} : null;
+    case "educationBuilt":
+      return completedOf(c, EDUCATION);
+    case "commerceBuilt":
+      return completedOf(c, COMMERCE);
+    case "securityBuilt":
+      return completedOf(c, SECURITY_BUILDINGS);
+    case "courtActive":
+      return c.completed.includes("courthouse") || c.buildings.some((b) => b.kind === "courthouse" && !b.hollow) ? {} : null;
     case "lowHappiness":
       return c.after.happiness < NEWS_LOW_HAPPINESS ? {} : null;
     case "housingShortage":
@@ -200,9 +253,15 @@ export const fillSlots = (text: string, values: Readonly<Partial<Record<SlotName
   });
 
 /** 1本の記事を作る（偏向の変換込み）。検閲で消えたら null */
+/** 号ごとに1つ決める値（同じ号の記事で季節がばらばらにならないように） */
+interface IssueValues {
+  readonly season: string;
+}
+
 const render = (
   draft: Draft,
   c: NewsContext,
+  issue: IssueValues,
 ): Effect.Effect<{ article: NewspaperArticle | null; censored: boolean; praised: boolean; hedged: number }, never, Rng> =>
   Effect.gen(function* () {
     const t = draft.template;
@@ -225,14 +284,14 @@ const render = (
       const shown = hedgeNumber ? Math.round(exact / NEWS_HEDGE_ROUNDING) * NEWS_HEDGE_ROUNDING : Math.round(exact);
       values.num = String(shown);
       values.pct = `${shown}%`;
-      values.hedge = hedgeNumber ? yield* pickFrom(VOCABULARY.hedges) : "";
+      values.hedge = hedgeNumber ? yield* pickFrom(VOCABULARY.numberHedges) : "";
       if (hedgeNumber) {
         hedged++;
         truth -= TRUTH_PENALTY_HEDGE;
       }
     } else if (t.slots.includes("hedge")) {
       const useHedge = (yield* random) < hedgeChance;
-      values.hedge = useHedge ? yield* pickFrom(VOCABULARY.hedges) : "";
+      values.hedge = useHedge ? yield* pickFrom(VOCABULARY.softHedges) : "";
       if (useHedge) {
         hedged++;
         truth -= TRUTH_PENALTY_HEDGE;
@@ -245,7 +304,7 @@ const render = (
     }
     if (praised) truth -= TRUTH_PENALTY_PRAISE;
     if (t.slots.includes("place")) values.place = yield* pickFrom(VOCABULARY.places);
-    if (t.slots.includes("season")) values.season = yield* pickFrom(VOCABULARY.seasons);
+    if (t.slots.includes("season")) values.season = issue.season;
     if (t.slots.includes("faction")) values.faction = yield* pickFrom(VOCABULARY.factions);
     if (t.slots.includes("building")) {
       values.building = messages.targets[draft.entities.building ?? (yield* pickFrom(BUILDING_IDS))];
@@ -267,7 +326,7 @@ const render = (
           : null;
     return {
       article: {
-        id: t.id,
+        id: t.type,
         section: t.section,
         headline,
         body,
@@ -330,7 +389,7 @@ const priorityOf = (d: Draft) =>
       ? PRIORITY.front
       : d.template.negative
         ? PRIORITY.negative
-        : (FLAVOR_IDS as readonly string[]).includes(d.template.id)
+        : (FLAVOR_TYPES as readonly string[]).includes(d.template.type)
           ? PRIORITY.flavor
           : PRIORITY.other;
 
@@ -343,13 +402,27 @@ export const generateNewspaper = (c: NewsContext): Effect.Effect<NewsResult> => 
     const used = new Set<string>();
     const take = (draft: Draft) => {
       drafts.push(draft);
-      used.add(draft.template.id);
+      used.add(draft.template.type);
       quota[draft.template.section] = Math.max(0, quota[draft.template.section] - 1);
     };
 
-    // 1) 続いているスレッドを優先して記事化（最大2件）
+    const recent = new Set(c.state.recentTemplates.filter((r) => c.turn - r.turn <= NEWSPAPER_RECENT_TURNS).map((r) => r.id));
+    const issue: IssueValues = { season: yield* pickFrom(VOCABULARY.seasons) };
+    const variantOf = (type: string) =>
+      Effect.map(pickWeighted(templatesOfType(type).map((t) => ({ t })), recent), (x) => x?.t ?? templatesOfType(type)[0]);
+
+    // 0) 空洞の建物は投書欄で最優先に匂わせる（v3.2 §1.8, §1.9。三角測量の要）
+    const hollow = evaluateTrigger("hollowBuilding", c);
+    const hollowThreadActive = c.state.threads.some((t) => t.key === "granary_hollow" && t.endedTurn === null);
+    if (hollow !== null && !hollowThreadActive) {
+      const template = yield* variantOf(THREAD_TEMPLATE.granary_hollow);
+      if (template) take({ template, entities: hollow, threadKey: "granary_hollow", isFollowUp: false });
+    }
+
+    // 1) 続いているスレッドを優先して記事化（最大2件。空洞の話題を先に）
     const threads: Thread[] = [];
-    for (const thread of c.state.threads) {
+    const ordered = [...c.state.threads].sort((x, y) => Number(y.key === "granary_hollow") - Number(x.key === "granary_hollow"));
+    for (const thread of ordered) {
       if (thread.endedTurn !== null) {
         if (c.turn - thread.endedTurn < THREAD_MAX_TURNS) threads.push(thread);
         continue;
@@ -359,39 +432,29 @@ export const generateNewspaper = (c: NewsContext): Effect.Effect<NewsResult> => 
         continue;
       }
       const followUps = drafts.filter((d) => d.isFollowUp).length;
-      const template = templateById(THREAD_TEMPLATE[thread.key]);
-      if (followUps < NEWSPAPER_MAX_THREAD_ARTICLES && !used.has(template.id)) {
+      const type = THREAD_TEMPLATE[thread.key];
+      if (followUps < NEWSPAPER_MAX_THREAD_ARTICLES && !used.has(type)) {
         const entities: Entities =
           thread.key === "granary_hollow" && thread.entity
             ? { building: thread.entity as BuildingId }
             : thread.key === "aide_ambition" && thread.entity
               ? { aide: thread.entity }
               : {};
-        take({ template, entities, threadKey: thread.key, isFollowUp: true });
+        const template = yield* variantOf(type);
+        if (template) take({ template, entities, threadKey: thread.key, isFollowUp: true });
       }
       const remaining = thread.remaining === null ? null : thread.remaining - 1;
       threads.push({ ...thread, remaining, endedTurn: remaining !== null && remaining <= 0 ? c.turn : null });
     }
 
-    // 2) セクションごとに、条件を満たすテンプレートを重み付き抽選（直近3年に使ったものは重み×0.3）
-    const recent = new Set(c.state.recentTemplates.filter((r) => c.turn - r.turn <= NEWSPAPER_RECENT_TURNS).map((r) => r.id));
+    // 2) セクションごとに、条件を満たすテンプレートを重み付き抽選（同じ記事タイプは1号に1本）
     for (const section of SECTIONS) {
       while (quota[section] > 0) {
-        const candidates = TEMPLATES.filter((t) => t.section === section && !used.has(t.id))
+        const candidates = TEMPLATES.filter((t) => t.section === section && !used.has(t.type))
           .map((t) => ({ t, entities: evaluateTrigger(t.trigger, c) }))
           .filter((x): x is { t: ArticleTemplateData; entities: Entities } => x.entities !== null);
         if (candidates.length === 0) break;
-        const weights = candidates.map((x) => x.t.weight * (recent.has(x.t.id) ? NEWSPAPER_RECENT_WEIGHT : 1));
-        const total = weights.reduce((a, b) => a + b, 0);
-        let u = (yield* random) * total;
-        let chosen = candidates[0];
-        for (let i = 0; i < candidates.length; i++) {
-          u -= weights[i] ?? 0;
-          if (u < 0) {
-            chosen = candidates[i];
-            break;
-          }
-        }
+        const chosen = yield* pickWeighted(candidates, recent);
         if (!chosen) break;
         take({ template: chosen.t, entities: chosen.entities, threadKey: chosen.t.threadKey ?? null, isFollowUp: false });
       }
@@ -403,21 +466,33 @@ export const generateNewspaper = (c: NewsContext): Effect.Effect<NewsResult> => 
     // 4) 偏向の変換（削除・称賛転換・ヘッジ・婉曲）
     const articles: NewspaperArticle[] = [];
     const censoredIds: string[] = [];
+    /** 掲載したテンプレート（バリエーション単位。直近の重み下げに使う） */
+    const rendered: string[] = [];
     const praisedIds: string[] = [];
     let hedgedCount = 0;
     for (const draft of kept) {
-      const r = yield* render(draft, c);
-      if (r.censored) censoredIds.push(draft.template.id);
-      if (r.praised) praisedIds.push(draft.template.id);
+      const r = yield* render(draft, c, issue);
+      if (r.censored) censoredIds.push(draft.template.type);
+      if (r.praised) praisedIds.push(draft.template.type);
       hedgedCount += r.hedged;
-      if (r.article) articles.push(r.article);
+      if (r.article) {
+        articles.push(r.article);
+        rendered.push(draft.template.id);
+      }
     }
 
     // 5) 5本未満ならフレーバー（広告・天候）で穴埋め
-    for (let i = 0; articles.length < NEWSPAPER_MIN_ARTICLES; i++) {
-      const id = FLAVOR_IDS[i % FLAVOR_IDS.length] ?? "N-19";
-      const r = yield* render({ template: templateById(id), entities: {}, threadKey: null, isFollowUp: false }, c);
-      if (r.article) articles.push(r.article);
+    // （まだ載せていないフレーバーのテンプレートから順に。それでも足りなければ同じものを重ねる）
+    const fillers = TEMPLATES.filter((t) => (FLAVOR_TYPES as readonly string[]).includes(t.type));
+    const fresh = fillers.filter((t) => !rendered.includes(t.id));
+    for (let i = 0; articles.length < NEWSPAPER_MIN_ARTICLES && fillers.length > 0; i++) {
+      const template = fresh[i] ?? fillers[i % fillers.length];
+      if (!template) break;
+      const r = yield* render({ template, entities: {}, threadKey: null, isFollowUp: false }, c, issue);
+      if (r.article) {
+        articles.push(r.article);
+        rendered.push(template.id);
+      }
     }
 
     // 6) 新しいスレッドを始める（終わってすぐの話題は再開しない）
@@ -435,7 +510,7 @@ export const generateNewspaper = (c: NewsContext): Effect.Effect<NewsResult> => 
 
     const recentTemplates = [
       ...c.state.recentTemplates.filter((r) => c.turn - r.turn < NEWSPAPER_RECENT_TURNS),
-      ...[...new Set(articles.map((a) => a.id))].map((id) => ({ id, turn: c.turn })),
+      ...[...new Set(rendered)].map((id) => ({ id, turn: c.turn })),
     ];
     return {
       newspaper: { turn: c.turn, seed, articles, stats: { censoredIds, praisedIds, hedgedCount } },
@@ -448,10 +523,20 @@ export const generateNewspaper = (c: NewsContext): Effect.Effect<NewsResult> => 
 
 export interface RenderedNewspaper {
   readonly title: string;
-  readonly articles: readonly { readonly section: string; readonly headline: string; readonly body: readonly string[] }[];
+  readonly articles: readonly {
+    readonly sectionId: Section;
+    readonly section: string;
+    readonly headline: string;
+    readonly body: readonly string[];
+  }[];
 }
 
 export const renderNewspaper = (newspaper: Newspaper): RenderedNewspaper => ({
   title: messages.newspaper.title(newspaper.turn),
-  articles: newspaper.articles.map((a) => ({ section: messages.newspaper.sections[a.section], headline: a.headline, body: a.body })),
+  articles: newspaper.articles.map((a) => ({
+    sectionId: a.section,
+    section: messages.newspaper.sections[a.section],
+    headline: a.headline,
+    body: a.body,
+  })),
 });

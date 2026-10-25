@@ -203,6 +203,8 @@ export const NEWS_LOW_HAPPINESS = 40;
 export const NEWS_HIGH_CORRUPTION = 30;
 export const NEWS_CORRUPTION_RESOLVED = 20;
 export const NEWS_AMBITIOUS_AIDE = 70;
+/** 遷移間近：成功条件のうち2つを満たし、残り1つがこの割合以上（W-08。記事 N-03） */
+export const NEWS_NEAR_TRANSITION_RATIO = 0.9;
 /** 数値をぼかすときの丸め単位 */
 export const NEWS_HEDGE_ROUNDING = 10;
 export const TRUTH_PENALTY_HEDGE = 0.1;
@@ -239,6 +241,8 @@ export const LOG_MAX_ENTRIES = 5000;
 /** 判子アニメの長さ（SPEC §12.8：簡易1秒） */
 export const STAMP_ANIMATION_MS = 1000;
 export const PAPER_FADE_MS = 400;
+/** 投書欄の記事にこれだけとどまったら「参照した」と数える（v3.2 §3.2 の計測） */
+export const LETTERS_DWELL_MS = 1200;
 
 // --- セーブ ---
 export const SAVE_SCHEMA_VERSION = 2;

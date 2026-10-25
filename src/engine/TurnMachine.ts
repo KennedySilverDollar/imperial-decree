@@ -124,6 +124,8 @@ export const playTurn = (
       overload: natural.construction.overload,
       events,
     });
+    // 新聞は開示前の建物で作る（同じ年に「投書が匂わせ、能力の高い側近が言及する」三角測量。v3.2 §1.8）
+    const buildingsBeforeDisclosure = next.buildings;
     const disclosed = new Set(reports.disclosedKinds);
     next = { ...next, buildings: next.buildings.map((b) => (b.hollow && disclosed.has(b.kind) ? { ...b, disclosed: true } : b)) };
 
@@ -137,8 +139,9 @@ export const playTurn = (
       before,
       after,
       derived,
-      buildings: next.buildings,
+      buildings: buildingsBeforeDisclosure,
       projects: next.projects,
+      completed: natural.construction.completions.filter((c) => !c.repair).map((c) => c.building),
       aides: next.aides,
       event: next.event,
       materialShortage: natural.construction.materialShortage,
