@@ -122,9 +122,11 @@ describe("テンプレートパーサー（D-35）", () => {
     ["道を大いに造れ", { action: "build", target: "road", magnitude: 80 }],
     ["井戸を少し掘れ", { action: "build", target: "well", magnitude: 25 }],
     ["役所を建てよ", { action: "build", target: "office" }],
-    ["祭を開け", { action: "invest", target: "welfare" }],
-    ["税を軽くせよ", { action: "tax", target: "tax", magnitude: -50 }],
-    ["汚職を改めよ", { action: "reform", target: "security" }],
+    ["祭を開け", { action: "invest", target: "welfare_policy" }],
+    ["税を軽くせよ", { action: "tax", target: "tax_rate", magnitude: -50 }],
+    ["汚職を改めよ", { action: "reform", target: "security_policy" }],
+    ["穀物倉を二つ建てよ", { action: "build", target: "granary", magnitude: 68 }],
+    ["診療所を建てよ", { action: "build", target: "clinic" }],
     ["住宅に30投資せよ", { action: "invest", target: "residential", magnitude: 30 }],
   ] as const)("「%s」", (text, expected) => {
     expect(parse(text)).toMatchObject(expected);

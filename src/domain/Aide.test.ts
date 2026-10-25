@@ -42,13 +42,16 @@ describe("専門一致と派閥対立", () => {
   it("action=tax は経済の専門に一致する", () => {
     expect(isSpecialtyMatch(merchant, "tax", "road")).toBe(true);
     expect(isSpecialtyMatch(steward, "build", "road")).toBe(true);
-    expect(isSpecialtyMatch(steward, "invest", "welfare")).toBe(false);
+    expect(isSpecialtyMatch(steward, "invest", "welfare_policy")).toBe(false);
+    expect(isSpecialtyMatch(merchant, "build", "farm")).toBe(true);
+    expect(isSpecialtyMatch(steward, "build", "granary")).toBe(true);
   });
   it("商業派は増税と治安に対立、開発派は縮小に対立", () => {
-    expect(isFactionConflict(merchant, "tax", "tax", 30)).toBe(true);
-    expect(isFactionConflict(merchant, "tax", "tax", -30)).toBe(false);
-    expect(isFactionConflict(merchant, "reform", "security", 30)).toBe(true);
-    expect(isFactionConflict(steward, "tax", "tax", -30)).toBe(true);
+    expect(isFactionConflict(merchant, "tax", "tax_rate", 30)).toBe(true);
+    expect(isFactionConflict(merchant, "tax", "tax_rate", -30)).toBe(false);
+    expect(isFactionConflict(merchant, "reform", "security_policy", 30)).toBe(true);
+    expect(isFactionConflict(merchant, "build", "courthouse", 34)).toBe(true);
+    expect(isFactionConflict(steward, "tax", "tax_rate", -30)).toBe(true);
     expect(isFactionConflict(steward, "build", "road", 30)).toBe(false);
   });
 });
@@ -56,13 +59,14 @@ describe("専門一致と派閥対立", () => {
 describe("担当側近の自動選択（A-05）", () => {
   it("専門一致を優先する", () => {
     expect(selectAide([steward, merchant], "build", "road")).toEqual({ aide: steward, reason: "specialty" });
-    expect(selectAide([steward, merchant], "tax", "tax")).toEqual({ aide: merchant, reason: "specialty" });
+    expect(selectAide([steward, merchant], "tax", "tax_rate")).toEqual({ aide: merchant, reason: "specialty" });
   });
   it("誰も一致しなければ信頼の高い方", () => {
-    expect(selectAide([merchant, steward], "invest", "welfare")).toEqual({ aide: steward, reason: "offSpecialty" });
+    expect(selectAide([merchant, steward], "invest", "welfare_policy")).toEqual({ aide: steward, reason: "offSpecialty" });
   });
-  it("複数一致すれば信頼順（市場はインフラ・経済の両方に一致）", () => {
-    expect(selectAide([merchant, steward], "build", "market")).toEqual({ aide: steward, reason: "trust" });
+  it("複数一致すれば信頼順", () => {
+    const builder = { ...merchant, specialty: "infrastructure" as const };
+    expect(selectAide([builder, steward], "build", "road")).toEqual({ aide: steward, reason: "trust" });
   });
   it("同点なら在任が長い方", () => {
     const newcomer = { ...steward, id: "x", appointedTurn: 5 };

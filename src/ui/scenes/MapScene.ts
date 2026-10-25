@@ -1,6 +1,7 @@
 import Phaser from "phaser";
 import type { MapState, Tile } from "../../domain/Map";
-import { palette } from "../theme";
+import { messages } from "../../i18n/messages";
+import { categoryTint, palette } from "../theme";
 
 // 領地図（SPEC §8, §12.7）。10×10 の抽象グリッドを図形だけで描く（画像アセットなし）。
 // 描画専用：MapState を受け取って描くだけで、状態は持たない。
@@ -14,6 +15,7 @@ const color = (hex: string): number => Number.parseInt(hex.slice(1), 16);
 export class MapScene extends Phaser.Scene {
   private graphics: Phaser.GameObjects.Graphics | null = null;
   private pending: MapState | null = null;
+  private labels: Phaser.GameObjects.Text[] = [];
 
   constructor() {
     super("MapScene");
@@ -33,6 +35,8 @@ export class MapScene extends Phaser.Scene {
     const g = this.graphics;
     if (!g) return;
     g.clear();
+    for (const label of this.labels) label.destroy();
+    this.labels = [];
     const full = MAP_PIXELS(map.size);
 
     // 水辺の縁取りと羊皮紙の地
@@ -52,6 +56,15 @@ export class MapScene extends Phaser.Scene {
     }
   }
 
+  /** 建物の1文字アイコン（普請中は薄く） */
+  private glyph(cx: number, cy: number, text: string, done: boolean): void {
+    const label = this.add
+      .text(cx, cy, text, { fontFamily: "serif", fontSize: "18px", color: palette.ink })
+      .setOrigin(0.5)
+      .setAlpha(done ? 0.9 : 0.45);
+    this.labels.push(label);
+  }
+
   private drawTile(g: Phaser.GameObjects.Graphics, tile: Tile): void {
     const x = MAP_BORDER + tile.x * TILE_SIZE;
     const y = MAP_BORDER + tile.y * TILE_SIZE;
@@ -68,43 +81,19 @@ export class MapScene extends Phaser.Scene {
         g.fillRect(x, cy - 5, TILE_SIZE, 10);
         g.fillRect(cx - 5, y, 10, TILE_SIZE);
         break;
-      case "residential":
-        g.fillStyle(color(palette.paper), 1);
-        g.fillRect(cx - 9, cy - 2, 18, 12);
-        g.fillStyle(ink, 0.85);
-        g.fillTriangle(cx - 12, cy - 1, cx + 12, cy - 1, cx, cy - 12);
-        g.lineStyle(1.5, ink, 0.85);
-        g.strokeRect(cx - 9, cy - 2, 18, 12);
+      case "building":
+      case "construction": {
+        const tint = tile.category === null ? palette.paper : categoryTint[tile.category];
+        const done = tile.kind === "building";
+        g.fillStyle(color(tint), done ? 1 : 0.35);
+        g.fillRect(x + 4, y + 4, TILE_SIZE - 8, TILE_SIZE - 8);
+        g.lineStyle(done ? 1.5 : 1, ink, done ? 0.85 : 0.5);
+        g.strokeRect(x + 4, y + 4, TILE_SIZE - 8, TILE_SIZE - 8);
+        if (tile.building !== null) this.glyph(cx, cy, messages.tileGlyphs[tile.building], done);
         break;
-      case "market":
-        g.fillStyle(color(palette.paper), 1);
-        g.fillRect(cx - 12, cy - 3, 24, 13);
-        g.fillStyle(ink, 0.75);
-        for (let i = 0; i < 4; i++) g.fillRect(cx - 12 + i * 6, cy - 10, 3, 7);
-        g.lineStyle(1.5, ink, 0.85);
-        g.strokeRect(cx - 12, cy - 3, 24, 13);
-        break;
-      case "office":
-        g.fillStyle(color(palette.paper), 1);
-        g.fillRect(cx - 12, cy - 2, 24, 14);
-        g.lineStyle(1.5, ink, 0.9);
-        g.strokeRect(cx - 12, cy - 2, 24, 14);
-        g.lineBetween(cx, cy - 2, cx, cy - 15);
-        g.fillStyle(color(palette.vermilion), 1);
-        g.fillTriangle(cx, cy - 15, cx + 11, cy - 11, cx, cy - 7);
-        break;
+      }
       case "empty":
         break;
-    }
-
-    if (tile.cracked) {
-      g.lineStyle(2, color(palette.warning), 1);
-      g.beginPath();
-      g.moveTo(x + 6, y + 6);
-      g.lineTo(x + 13, y + 14);
-      g.lineTo(x + 9, y + 19);
-      g.lineTo(x + 17, y + 28);
-      g.strokePath();
     }
   }
 }

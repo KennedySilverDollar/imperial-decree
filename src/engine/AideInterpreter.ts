@@ -5,7 +5,10 @@ import {
   CONCEAL_BASE_CHANCE,
   CONCEAL_DIVISOR,
   CONCEAL_LOYALTY_MAX,
+  ESTIMATE_ERROR_DIVISOR,
   HOLLOW_DISCLOSE_ABILITY_MIN,
+  OVERLOAD_SEVERE,
+  SHORTAGE_SEVERE,
   MISREAD_CHANCE_SCALE,
   MISREAD_MAX,
   MISREAD_MIN,
@@ -22,8 +25,17 @@ import {
 } from "../domain/constants";
 import type { DecreeIntent } from "../domain/DecreeIntent";
 import type { ParamDelta } from "../domain/GameState";
-import type { AideAdjustment, AideReport, Distortion, ExecutionNote, ReportItem, ReportNote } from "../domain/TurnRecord";
-import { PARAM_KEYS, SWAPPABLE_TARGETS, type ParamKey } from "../domain/Vocabulary";
+import type {
+  AideAdjustment,
+  AideReport,
+  Completion,
+  Distortion,
+  EventNote,
+  ExecutionNote,
+  ReportItem,
+  ReportNote,
+} from "../domain/TurnRecord";
+import { PARAM_KEYS, SWAPPABLE_TARGETS, type BuildingId, type ParamKey } from "../domain/Vocabulary";
 import { chance, pick, randRange, type Rng } from "../services/Rng";
 
 // 側近による解釈と歪み（SPEC §6.3, §6.4 / A-04, A-05 / BALANCE §4）
@@ -46,6 +58,7 @@ export const omitChance = (aide: Aide): number => (PARAM_MAX - aide.ability) / R
 export const interpret = (
   aides: readonly Aide[],
   intent: DecreeIntent,
+  adminBonus = 0,
 ): Effect.Effect<AideAdjustment | null, never, Rng> =>
   Effect.gen(function* () {
     const selection = selectAide(aides, intent.action, intent.target);
@@ -53,8 +66,8 @@ export const interpret = (
     const { aide, reason } = selection;
     const specialtyMatch = isSpecialtyMatch(aide, intent.action, intent.target);
     const factionConflict = isFactionConflict(aide, intent.action, intent.target, intent.magnitude);
-    const accuracy = computeAccuracy(aide, specialtyMatch, factionConflict);
-    const base = { aideId: aide.id, reason, accuracy, specialtyMatch, factionConflict };
+    const accuracy = computeAccuracy(aide, specialtyMatch, factionConflict, adminBonus);
+    const base = { aideId: aide.id, reason, accuracy, adminBonus, specialtyMatch, factionConflict };
     if (!isDistortable(intent)) {
       return { ...base, distortions: [], adjustedIntent: intent, effectFactor: 1 };
     }
@@ -95,18 +108,44 @@ export const interpret = (
 
 const isWorsened = (param: ParamKey, delta: number): boolean => (param === "corruption" ? delta > 0 : delta < 0);
 
+export interface ProjectEstimate {
+  readonly building: BuildingId;
+  readonly count: number;
+  /** 今の割り振りが続いたときの残り年数（Infinity は「進まない」） */
+  readonly trueTurns: number;
+}
+
 export interface ReportContext {
   readonly delta: ParamDelta;
   readonly actingAideId: string | null;
   readonly executionNotes: readonly ExecutionNote[];
   readonly metaRemoved: boolean;
-  readonly hollowInfrastructure: number;
+  /** 未開示の空洞の建物（種類ごとの棟数） */
+  readonly undisclosedHollow: Readonly<Partial<Record<BuildingId, number>>>;
+  readonly projects: readonly ProjectEstimate[];
+  readonly completions: readonly Completion[];
+  readonly materialShortage: number;
+  readonly overload: number;
+  readonly events: readonly EventNote[];
 }
 
 export interface ReportsResult {
   readonly reports: readonly AideReport[];
-  readonly hollowDisclosed: boolean;
+  /** 能力の高い側近が開示した空洞の種類（地図の亀裂。Z-13） */
+  readonly disclosedKinds: readonly BuildingId[];
 }
+
+/** 報告に値する資材不足の下限 */
+const SHORTAGE_REPORT_MIN = 0.05;
+
+/** 工期の見積り（能力が低いほど誤差が大きい。Z-03） */
+const estimate = (aide: Aide, trueTurns: number): Effect.Effect<number | null, never, Rng> =>
+  Effect.gen(function* () {
+    if (!Number.isFinite(trueTurns)) return null;
+    const error = (PARAM_MAX - aide.ability) / ESTIMATE_ERROR_DIVISOR;
+    const noisy = trueTurns * (1 + (yield* randRange(-error, error)));
+    return Math.max(1, Math.round(noisy));
+  });
 
 export const buildAideReports = (
   aides: readonly Aide[],
@@ -116,7 +155,7 @@ export const buildAideReports = (
     const allItems: ReportItem[] = PARAM_KEYS.filter((param) => Math.abs(context.delta[param]) >= REPORT_MIN_DELTA).map(
       (param) => ({ param, delta: context.delta[param] }),
     );
-    let hollowDisclosed = false;
+    const disclosed = new Set<BuildingId>();
     const reports: AideReport[] = [];
 
     for (const aide of aides) {
@@ -139,11 +178,26 @@ export const buildAideReports = (
         if (context.metaRemoved) notes.push({ kind: "metaIgnored" });
         notes.push(...context.executionNotes.map((note): ReportNote => ({ kind: "execution", note })));
       }
-      if (context.hollowInfrastructure > 0 && aide.ability >= HOLLOW_DISCLOSE_ABILITY_MIN) {
-        notes.push({ kind: "hollowDisclosed", amount: context.hollowInfrastructure });
-        hollowDisclosed = true;
+      // イベントは全員が報告する（Z-09）
+      notes.push(...context.events.map((note): ReportNote => ({ kind: "event", note })));
+      notes.push(...context.completions.map((c): ReportNote => ({ kind: "completed", building: c.building, count: c.count, repair: c.repair })));
+      for (const p of context.projects) {
+        notes.push({ kind: "constructionEstimate", building: p.building, count: p.count, turns: yield* estimate(aide, p.trueTurns) });
+      }
+      // 都合の悪い報告（資材不足・無理な命令・空洞）は、隠蔽した側近は口にしない（v3.2 §1.8）
+      if (!concealed) {
+        if (context.materialShortage > SHORTAGE_REPORT_MIN) notes.push({ kind: "materialShortage", severe: context.materialShortage > SHORTAGE_SEVERE });
+        if (context.overload > OVERLOAD_SEVERE) notes.push({ kind: "overload" });
+        if (aide.ability >= HOLLOW_DISCLOSE_ABILITY_MIN) {
+          for (const [building, count] of Object.entries(context.undisclosedHollow) as [BuildingId, number][]) {
+            if (count > 0) {
+              notes.push({ kind: "hollowDisclosed", building, count });
+              disclosed.add(building);
+            }
+          }
+        }
       }
       reports.push({ aideId: aide.id, items: visible, notes, hiddenItems: hidden, concealed });
     }
-    return { reports, hollowDisclosed };
+    return { reports, disclosedKinds: [...disclosed] };
   });

@@ -1,22 +1,65 @@
 import { useEffect, useState } from "react";
 import { DECREE_BASE_COST, DECREE_POLITICAL_COST, STAMP_ANIMATION_MS, TAG_CHAR_COST } from "../../domain/constants";
-import { remainingChars, validateDecree, type Decree, type DecreeTag, type ScaleTagValue } from "../../domain/Decree";
+import {
+  DEADLINE_TAG_VALUES,
+  PRIORITY_TAG_VALUES,
+  remainingChars,
+  SCALE_TAG_VALUES,
+  validateDecree,
+  type DeadlineTagValue,
+  type Decree,
+  type DecreeTag,
+  type PriorityTagValue,
+  type ScaleTagValue,
+} from "../../domain/Decree";
 import { isValidIntentDeclaration, type IntentDeclaration } from "../../domain/IntentDeclaration";
 import { TARGETS, type Target } from "../../domain/Vocabulary";
 import { messages } from "../../i18n/messages";
 import { EMPTY_INTENT, IntentPanel, type IntentDraft } from "./IntentPanel";
 import { validationMessage } from "../validation";
 
-// 勅令入力（SPEC §6.1 / A-06）：残り文字数の常時表示、タグ（対象・規模、1つ3文字）、超過時は判を押せない。
+// 勅令入力（SPEC §6.1 / DECISIONS I-30）：残り文字数の常時表示、タグ（対象・規模・期限・優先度、1つ5文字）、超過時は判を押せない。
 
-const SCALES: readonly ScaleTagValue[] = ["small", "medium", "large"];
+interface TagDraft {
+  readonly target: Target | "";
+  readonly scale: ScaleTagValue | "";
+  readonly deadline: DeadlineTagValue | "";
+  readonly priority: PriorityTagValue | "";
+}
 
-const toDecree = (text: string, target: Target | "", scale: ScaleTagValue | ""): Decree => {
+const EMPTY_TAGS: TagDraft = { target: "", scale: "", deadline: "", priority: "" };
+
+const toDecree = (text: string, draft: TagDraft): Decree => {
   const tags: DecreeTag[] = [];
-  if (target !== "") tags.push({ kind: "target", value: target });
-  if (scale !== "") tags.push({ kind: "scale", value: scale });
+  if (draft.target !== "") tags.push({ kind: "target", value: draft.target });
+  if (draft.scale !== "") tags.push({ kind: "scale", value: draft.scale });
+  if (draft.deadline !== "") tags.push({ kind: "deadline", value: draft.deadline });
+  if (draft.priority !== "") tags.push({ kind: "priority", value: draft.priority });
   return { text, tags };
 };
+
+function TagSelect<V extends string>(props: {
+  readonly label: string;
+  readonly value: V | "";
+  readonly options: readonly V[];
+  readonly names: Readonly<Record<V, string>>;
+  readonly disabled: boolean;
+  readonly onChange: (value: V | "") => void;
+}) {
+  return (
+    <label>
+      {props.label}
+      <select value={props.value} disabled={props.disabled} onChange={(e) => props.onChange(e.target.value as V | "")}>
+        <option value="">{messages.ui.decree.tagNone}</option>
+        {props.options.map((value) => (
+          <option key={value} value={value}>
+            {props.names[value]}
+          </option>
+        ))}
+      </select>
+    </label>
+  );
+}
 
 const toIntent = (draft: IntentDraft): IntentDeclaration | null | "invalid" => {
   if (draft.param === "") return null;
@@ -38,16 +81,14 @@ interface Props {
 export function DecreePanel({ turn, busy, thinking, canIssue, hasAide, onSubmit }: Props) {
   const t = messages.ui.decree;
   const [text, setText] = useState("");
-  const [target, setTarget] = useState<Target | "">("");
-  const [scale, setScale] = useState<ScaleTagValue | "">("");
+  const [tags, setTags] = useState<TagDraft>(EMPTY_TAGS);
   const [intent, setIntent] = useState<IntentDraft>(EMPTY_INTENT);
   const [stamping, setStamping] = useState(false);
 
   // 新しい年になったら紙を新しくする
   useEffect(() => {
     setText("");
-    setTarget("");
-    setScale("");
+    setTags(EMPTY_TAGS);
     setIntent(EMPTY_INTENT);
     setStamping(false);
   }, [turn]);
@@ -57,7 +98,7 @@ export function DecreePanel({ turn, busy, thinking, canIssue, hasAide, onSubmit 
     if (!busy) setStamping(false);
   }, [busy]);
 
-  const decree = toDecree(text, target, scale);
+  const decree = toDecree(text, tags);
   const remaining = remainingChars(decree);
   const issue = validateDecree(decree);
   const declaration = toIntent(intent);
@@ -96,29 +137,12 @@ export function DecreePanel({ turn, busy, thinking, canIssue, hasAide, onSubmit 
             {t.remaining(remaining)}
           </div>
           <div className="tags">
-            <label>
-              {t.tagTarget}
-              <select value={target} disabled={locked} onChange={(e) => setTarget(e.target.value as Target | "")}>
-                <option value="">{t.tagNone}</option>
-                {TARGETS.map((value) => (
-                  <option key={value} value={value}>
-                    {messages.targets[value]}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <label>
-              {t.tagScale}
-              <select value={scale} disabled={locked} onChange={(e) => setScale(e.target.value as ScaleTagValue | "")}>
-                <option value="">{t.tagNone}</option>
-                {SCALES.map((value) => (
-                  <option key={value} value={value}>
-                    {messages.scaleTags[value]}
-                  </option>
-                ))}
-              </select>
-            </label>
+            <TagSelect label={t.tagTarget} value={tags.target} options={TARGETS} names={messages.targets} disabled={locked} onChange={(target) => setTags({ ...tags, target })} />
+            <TagSelect label={t.tagScale} value={tags.scale} options={SCALE_TAG_VALUES} names={messages.scaleTags} disabled={locked} onChange={(scale) => setTags({ ...tags, scale })} />
+            <TagSelect label={t.tagDeadline} value={tags.deadline} options={DEADLINE_TAG_VALUES} names={messages.deadlineTags} disabled={locked} onChange={(deadline) => setTags({ ...tags, deadline })} />
+            <TagSelect label={t.tagPriority} value={tags.priority} options={PRIORITY_TAG_VALUES} names={messages.priorityTags} disabled={locked} onChange={(priority) => setTags({ ...tags, priority })} />
             <span className="panel-note">{t.tagCost(TAG_CHAR_COST)}</span>
+            <span className="panel-note">{t.tagHintNote}</span>
           </div>
           <IntentPanel draft={intent} onChange={setIntent} disabled={locked} />
         </div>

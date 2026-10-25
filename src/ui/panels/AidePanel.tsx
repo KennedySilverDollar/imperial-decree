@@ -1,8 +1,8 @@
 import { useState } from "react";
 import { ALL_AIDE_PROFILES, type Aide } from "../../domain/Aide";
 import { APPOINT_POLITICAL_COST, MAX_AIDES } from "../../domain/constants";
-import type { AideReport, ReportNote } from "../../domain/TurnRecord";
-import { renderExecutionNote } from "../../engine/ResultView";
+import type { AideReport } from "../../domain/TurnRecord";
+import { renderReportNote } from "../../engine/ResultView";
 import { aideName, messages } from "../../i18n/messages";
 
 const t = messages.ui.aides;
@@ -27,18 +27,11 @@ function AideProfile({ aide }: { readonly aide: AideLike }) {
   );
 }
 
-const renderNote = (note: ReportNote): string =>
-  note.kind === "execution"
-    ? renderExecutionNote(note.note)
-    : note.kind === "metaIgnored"
-      ? messages.reports.metaIgnored
-      : messages.reports.hollowDisclosed(note.amount);
-
 function ReportLetter({ report }: { readonly report: AideReport | undefined }) {
   if (!report) return <p className="report-empty">{t.noReport}</p>;
   const lines = [
     ...report.items.map((item) => messages.reports.item(messages.params[item.param], item.delta)),
-    ...report.notes.map(renderNote),
+    ...report.notes.map(renderReportNote),
   ];
   return (
     <div className="report-letter fade-in">

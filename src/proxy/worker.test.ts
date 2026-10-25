@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { LLM_TEMPERATURE } from "../domain/constants";
+import { TARGETS } from "../domain/Buildings";
 import { makeRateLimiter } from "./rateLimit";
 import { handleRequest, type ProxyEnv } from "./worker";
 
@@ -75,7 +76,8 @@ describe("プロキシ：正常系と Mistral へのリクエスト", () => {
       json_schema: { name: "decree_intent", strict: true, schema: { additionalProperties: false } },
     });
     const schema = (req?.body.response_format as { json_schema: { schema: { properties: Record<string, { enum?: string[] }> } } }).json_schema.schema;
-    expect(schema.properties.target?.enum).toEqual(["residential", "road", "well", "office", "market", "tax", "welfare", "security"]);
+    expect(schema.properties.target?.enum).toEqual([...TARGETS]);
+    expect(schema.properties.target?.enum).toHaveLength(20);
   });
 
   it("勅令本文はユーザーメッセージだけに入り、システムプロンプトには入らない", async () => {
@@ -110,10 +112,24 @@ describe("プロキシ：リクエストからスキーマ等を受け取らな�
     expect(up.calls).toHaveLength(0);
   });
 
+  it("4種のタグをそのまま上流に渡す", async () => {
+    const tags = [
+      { kind: "target", value: "granary" },
+      { kind: "scale", value: "small" },
+      { kind: "deadline", value: "fewYears" },
+      { kind: "priority", value: "high" },
+    ];
+    const { response, up } = await call({ text: "倉を建てよ", tags });
+    expect(response.status).toBe(200);
+    const messages = up.calls[0]?.body.messages as { content: string }[];
+    expect(JSON.parse(messages[1]?.content ?? "{}")).toEqual({ decree: "倉を建てよ", tags });
+  });
+
   it.each([
     ["空の本文", { text: "  ", tags: [] }, "invalid_text"],
     ["長すぎる本文", { text: "道".repeat(201), tags: [] }, "text_too_long"],
     ["不正なタグ", { text: "道", tags: [{ kind: "deadline", value: "soon" }] }, "invalid_tags"],
+    ["不正な優先度", { text: "道", tags: [{ kind: "priority", value: "urgent" }] }, "invalid_tags"],
     ["許可外の target タグ", { text: "道", tags: [{ kind: "target", value: "castle" }] }, "invalid_tags"],
     ["タグに余計なキー", { text: "道", tags: [{ kind: "scale", value: "large", schema: {} }] }, "invalid_tags"],
     ["JSON でない", "{oops", "invalid_json"],

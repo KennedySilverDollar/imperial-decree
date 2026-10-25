@@ -11,7 +11,7 @@ import {
   PROXY_UPSTREAM_TIMEOUT_MS,
   SCALE_TAG_MAGNITUDE,
 } from "../domain/constants";
-import type { DecreeTag } from "../domain/Decree";
+import { DEADLINE_TAG_VALUES, PRIORITY_TAG_VALUES, type DecreeTag } from "../domain/Decree";
 import { isTarget } from "../domain/Vocabulary";
 import { SYSTEM_PROMPT } from "./prompt";
 import { makeRateLimiter, type RateLimiter } from "./rateLimit";
@@ -98,6 +98,8 @@ const isDecreeTag = (value: unknown): value is DecreeTag => {
   if (Object.keys(tag).some((k) => k !== "kind" && k !== "value")) return false;
   if (tag.kind === "target") return typeof tag.value === "string" && isTarget(tag.value);
   if (tag.kind === "scale") return typeof tag.value === "string" && SCALES.includes(tag.value);
+  if (tag.kind === "deadline") return typeof tag.value === "string" && (DEADLINE_TAG_VALUES as readonly string[]).includes(tag.value);
+  if (tag.kind === "priority") return typeof tag.value === "string" && (PRIORITY_TAG_VALUES as readonly string[]).includes(tag.value);
   return false;
 };
 

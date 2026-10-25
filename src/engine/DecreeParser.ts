@@ -9,6 +9,7 @@ import {
   LLM_TIMEOUT_MS,
   MAGNITUDE_MAX,
   MAGNITUDE_MIN,
+  MAGNITUDE_PER_BUILDING,
   SCALE_TAG_MAGNITUDE,
   TEMPLATE_MATCH_CONFIDENCE,
 } from "../domain/constants";
@@ -16,7 +17,8 @@ import { findTag, type Decree } from "../domain/Decree";
 import type { DecreeIntent } from "../domain/DecreeIntent";
 import { clamp } from "../domain/math";
 import type { Interpretation, LLMFailureReason } from "../domain/TurnRecord";
-import { ACTIONS, DEFAULT_ACTION_FOR_TARGET, isTarget, type Action, type Target } from "../domain/Vocabulary";
+import { defaultActionFor, isBuildingId, isTarget, type Action, type Target } from "../domain/Vocabulary";
+import { ActionSchema } from "./IntentSchema";
 import { messages } from "../i18n/messages";
 import { LLMError } from "../services/errors";
 import { LLMService } from "../services/LLMService";
@@ -38,8 +40,11 @@ export const sanitizeDecreeText = (text: string): { readonly text: string; reado
 // --- LLM 出力の検証 ---
 
 /** プロキシの固定スキーマ（P3）と同じ形。範囲は clamp で保証する（P-03） */
+export { TargetSchema } from "./IntentSchema";
+
+/** 未知の target は no-op にするため（CLAUDE.md §4-10）、LLM 出力の検証では文字列で受けて後で許可リストを引く */
 export const RawDecreeIntentSchema = Schema.Struct({
-  action: Schema.Literal(...ACTIONS),
+  action: ActionSchema,
   target: Schema.String,
   magnitude: Schema.Finite,
   budget: Schema.Finite,
@@ -103,18 +108,22 @@ export const templateParse = (decree: Decree, text: string): DecreeIntent => {
   if (target === null) {
     return { action: "build", target: null, magnitude: 0, budget: 0, confidence: 0 };
   }
-  const action: Action = findKeyword(text, parser.actionKeywords) ?? DEFAULT_ACTION_FOR_TARGET[target];
+  const action: Action = findKeyword(text, parser.actionKeywords) ?? defaultActionFor(target);
   const scaleTag = findTag(decree, "scale");
   const digits = DIGITS.exec(text);
+  // 「三つ」「二棟」など建物の数は、n 棟 → magnitude = MAGNITUDE_PER_BUILDING × n（W-12）
+  const counted = isBuildingId(target) ? parser.countKeywords.find(([kanji]) => parser.counters.some((c) => text.includes(kanji + c))) : undefined;
   const base = scaleTag
     ? SCALE_TAG_MAGNITUDE[scaleTag.value]
-    : digits
-      ? Number(digits[0])
-      : includesAny(text, parser.largeKeywords)
-        ? SCALE_TAG_MAGNITUDE.large
-        : includesAny(text, parser.smallKeywords)
-          ? SCALE_TAG_MAGNITUDE.small
-          : DEFAULT_TEMPLATE_MAGNITUDE;
+    : counted
+      ? MAGNITUDE_PER_BUILDING * counted[1]
+      : digits
+        ? Number(digits[0])
+        : includesAny(text, parser.largeKeywords)
+          ? SCALE_TAG_MAGNITUDE.large
+          : includesAny(text, parser.smallKeywords)
+            ? SCALE_TAG_MAGNITUDE.small
+            : DEFAULT_TEMPLATE_MAGNITUDE;
   const sign = includesAny(text, parser.negativeKeywords) ? -1 : 1;
   return {
     action,

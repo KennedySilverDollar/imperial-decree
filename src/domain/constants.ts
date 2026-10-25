@@ -1,4 +1,4 @@
-// バランス値と仕様上の定数（docs/BALANCE.md §10 と対応。変更時は BALANCE.md も更新する）
+// バランス値と仕様上の定数（docs/BALANCE.md 第2部 §20・第3部 §21〜§26 と対応。変更時は BALANCE.md も更新する）
 
 // --- 初期値・資源 ---
 export const INITIAL_POPULATION = 120;
@@ -6,7 +6,6 @@ export const INITIAL_TREASURY = 500;
 export const INITIAL_HAPPINESS = 50;
 export const INITIAL_INFRASTRUCTURE = 10;
 export const INITIAL_CORRUPTION = 5;
-export const INITIAL_HOUSING_UNITS = 8;
 export const INITIAL_POLITICAL_CAPITAL = 3;
 export const POLITICAL_CAPITAL_INCOME = 1;
 export const POLITICAL_CAPITAL_MAX = 5;
@@ -20,8 +19,8 @@ export const APPOINT_CANDIDATE_COUNT = 2;
 
 // --- 勅令入力 ---
 export const DECREE_CHAR_LIMIT = 40;
-export const TAG_CHAR_COST = 3;
-export const MAX_TAGS = 2;
+export const TAG_CHAR_COST = 5;
+export const MAX_TAGS = 4;
 export const SCALE_TAG_MAGNITUDE = { small: 25, medium: 50, large: 80 } as const;
 export const DEFAULT_TEMPLATE_MAGNITUDE = 50;
 export const TEMPLATE_MATCH_CONFIDENCE = 0.6;
@@ -36,30 +35,41 @@ export const CONFIDENCE_MIN = 0;
 export const CONFIDENCE_MAX = 1;
 export const BUDGET_MIN = 0;
 export const LOW_CONFIDENCE_THRESHOLD = 0.3;
-/** 縮小後の効果量がこれ未満なら「何もできなかった」扱い（DECISIONS N-10） */
-export const MIN_EFFECTIVE_SCALE = 0.01;
 
-// --- 人口 ---
-export const RESIDENTS_PER_HOUSING_TILE = 20;
+// --- 人口（BALANCE §15, §26） ---
 export const HAPPINESS_GROWTH_THRESHOLD = 50;
 export const HAPPINESS_NEUTRAL = 50;
-export const POPULATION_GROWTH_BASE = 0.03;
+export const POPULATION_GROWTH_BASE = 0.04;
 export const POPULATION_GROWTH_PER_HAPPINESS = 0.002;
 export const POPULATION_OUTFLOW_PER_HAPPINESS = 0.004;
 export const OVERCROWD_OUTFLOW_RATE = 0.15;
+/** 過密の度合い = (人口 − 住宅容量) / この値（v3.2 §2.5） */
+export const OVERCROWD_DIVISOR = 50;
+export const PEOPLE_PER_FOOD = 12;
+export const FAMINE_HAPPINESS_PENALTY = 15;
+export const FAMINE_OUTFLOW_RATE = 0.15;
+export const SANITATION_LOW = 3;
+export const SANITATION_PENALTY = 3;
+export const DISEASE_OUTFLOW_RATE = 0.02;
+export const SECURITY_LOW = 3;
+export const SECURITY_PENALTY = 3;
+/** 予備のベースライン（既定0。BALANCE §13） */
+export const SANITATION_BASE = 0;
+export const SECURITY_BASE = 0;
 
-// --- 税収と支出 ---
-export const TAX_PER_CAPITA = 1.25;
-export const INFRA_UPKEEP_PER_POINT = 2.0;
+// --- 税収と支出（BALANCE §12, §14, §26） ---
+export const TAX_PER_CAPITA = 1.45;
 export const AIDE_SALARY = 15;
-export const OFFICE_UPKEEP = 20;
-export const MARKET_TAX_BONUS = 0.12;
-export const MARKET_MAX = 3;
+export const UPKEEP_MULTIPLIER = 1.5;
+export const BUILD_COST_MULTIPLIER = 1.0;
+export const ROAD_TILE_TAX = 2;
+export const ROAD_TILE_UPKEEP = 1;
 export const PERCENT = 100;
 
-// --- 幸福度 ---
-export const HAPPINESS_EQUILIBRIUM_BASE = 48;
-export const HAPPINESS_PER_INFRA = 0.4;
+// --- 幸福度（BALANCE §15） ---
+export const HAPPINESS_EQUILIBRIUM_BASE = 45;
+export const HAPPINESS_PER_INFRA = 0.2;
+export const HAPPINESS_REF_POP = 120;
 export const HAPPINESS_PENALTY_PER_CORRUPTION = 0.2;
 export const HAPPINESS_REVERT_RATE = 0.1;
 export const CROWDING_HAPPINESS_PENALTY = 3;
@@ -71,28 +81,68 @@ export const INFRA_DECAY_CHANCE = 0.3;
 export const INFRA_DECAY_AMOUNT = 1;
 export const CORRUPTION_DRIFT_PER_TURN = 0.3;
 
-// --- 勅令の効果（action × target） ---
-export const ROAD_INFRA_PER_MAG = 0.12;
-export const ROAD_COST_PER_MAG = 4;
-export const WELL_INFRA_PER_MAG = 0.06;
-export const WELL_HAPPINESS_PER_MAG = 0.05;
-export const WELL_COST_PER_MAG = 3;
-export const RESIDENTIAL_UNITS_PER_MAG = 0.06;
-export const RESIDENTIAL_COST_PER_MAG = 5;
-export const MARKET_COST = 150;
-export const LEVY_PER_CAPITA_PER_MAG = 0.03;
-export const LEVY_HAPPINESS_PER_MAG = 0.25;
-export const RELIEF_HAPPINESS_PER_MAG = 0.1;
-export const WELFARE_HAPPINESS_PER_MAG = 0.15;
-export const WELFARE_COST_PER_MAG = 3;
-export const SECURITY_CORRUPTION_PER_MAG = 0.1;
-export const SECURITY_HAPPINESS_PER_MAG = 0.03;
-export const SECURITY_COST_PER_MAG = 2;
+// --- 建設（BALANCE §14, §21） ---
+export const MAGNITUDE_PER_BUILDING = 34;
+export const MAX_BUILD_PER_DECREE = 3;
+/** 道路を手抜きされたときに残るインフラの割合 */
+export const HOLLOW_ROAD_INFRA_FACTOR = 0.5;
+export const SCHOOL_ADMIN_DELAY_TURNS = 5;
+export const ADMIN_ACCURACY_PER_POINT = 0.05;
+export const ADMIN_ACCURACY_MAX = 0.15;
+export const HOLLOW_REPAIR_COST_RATIO = 0.5;
 
-// --- 役所 ---
-export const OFFICE_COST = 400;
-export const OFFICE_MIN_POPULATION = 200;
-export const OFFICE_MIN_INFRASTRUCTURE = 15;
+// --- 労働人口と資材（BALANCE §22〜§24、v3.3） ---
+export const LABOR_RATIO = 0.5;
+export const OVERLOAD_SEVERE = 1.5;
+export const OVERLOAD_HOLLOW_GAIN = 0.3;
+export const OVERLOAD_CORRUPTION_PER_TURN = 1.0;
+export const INITIAL_WOOD = 60;
+export const INITIAL_STONE = 40;
+export const WOOD_INCOME = 20;
+export const STONE_INCOME = 16;
+export const WORKSHOP_WOOD = 3;
+export const WORKSHOP_STONE = 2;
+export const MATERIAL_CAP = 200;
+export const SHORTAGE_SEVERE = 0.5;
+export const SHORTAGE_HOLLOW_GAIN = 0.6;
+export const SHORTAGE_CORRUPTION_PER_TURN = 2.0;
+/** 完成時の空洞化確率の上限 */
+export const HOLLOW_CHANCE_CAP = 0.9;
+/** 汚職率そのものによる空洞化確率の上限（v3.2 §2.8） */
+export const HOLLOW_MAX_CHANCE = 0.3;
+
+// --- 政策（BALANCE §16） ---
+export const POLICY_LEVEL_MAX = 2;
+export const POLICY_DURATION_TURNS = 4;
+export const POLICY_LARGE_MAGNITUDE = 60;
+export const TAX_RATE_INCOME_PER_LEVEL = 0.15;
+export const TAX_RATE_HAPPINESS_PER_LEVEL = 3;
+export const TAX_RATE_SHOCK_PER_LEVEL = 2;
+export const WELFARE_HAPPINESS_PER_LEVEL = 3;
+export const WELFARE_COST_PER_CAPITA_PER_LEVEL = 0.12;
+export const SECURITY_POLICY_SECURITY_PER_LEVEL = 2;
+export const SECURITY_POLICY_HAPPINESS_PER_LEVEL = 1.5;
+export const SECURITY_POLICY_COST_PER_LEVEL = 10;
+
+// --- ランダムイベント（BALANCE §25、DECISIONS §12.4） ---
+export const EVENT_COOLDOWN_TURNS = 3;
+export const EVENT_MAX_TURNS = 5;
+export const EVENT_RESOLVE_HAPPINESS = 3;
+export const EPIDEMIC_CHANCE = 0.04;
+export const EPIDEMIC_CHANCE_LOW_SANITATION = 0.05;
+export const EPIDEMIC_POPULATION_LOSS = 0.04;
+export const EPIDEMIC_HAPPINESS_PENALTY = 6;
+export const EPIDEMIC_AFTERMATH_HAPPINESS = 8;
+export const FAMINE_EVENT_CHANCE = 0.05;
+export const FAMINE_EVENT_CHANCE_NO_GRANARY = 0.03;
+export const FAMINE_EVENT_FOOD_FACTOR = 0.5;
+export const FAMINE_EVENT_AFTERMATH_POPULATION = 0.05;
+export const BANDIT_CHANCE = 0.04;
+export const BANDIT_CHANCE_LOW_SECURITY = 0.05;
+export const BANDIT_TREASURY_LOSS = 25;
+export const BANDIT_WOOD_LOSS = 0.2;
+export const BANDIT_HAPPINESS_PENALTY = 4;
+export const BANDIT_AFTERMATH_CORRUPTION = 5;
 
 // --- 側近の解釈精度（SPEC §7.6 / A-04） ---
 export const ACCURACY_BASE = 0.3;
@@ -131,16 +181,37 @@ export const REPORT_MIN_DELTA = 0.5;
 export const SUCCESS_POPULATION = 300;
 export const SUCCESS_INFRASTRUCTURE = 25;
 
-// --- 地図 ---
+// --- 地図（v3.2 §2.6 / BALANCE §14） ---
 export const GRID_SIZE = 10;
 export const INFRA_PER_ROAD_TILE = 5;
-export const MIN_EMPTY_TILES = 10;
-export const HOLLOW_DECAY_PER_TURN = 1;
+/** 道路に予約する区画（十字）の数。建物は残りの区画に置く */
+export const ROAD_TILE_MAX = 19;
 export const HOLLOW_DISCLOSE_ABILITY_MIN = 70;
 
-// --- 新聞 ---
-export const NEWSPAPER_BIAS = 30;
-export const NEWSPAPER_TONE_CHANCE = 0.3;
+// --- 新聞 v2（v3.2 §1.5〜§1.7 / BALANCE §18） ---
+export const NEWSPAPER_IDEOLOGICAL_BIAS = 30;
+export const NEWSPAPER_CENSORSHIP = 20;
+export const NEWSPAPER_BUREAUCRATIC_PRESSURE = 10;
+export const NEWSPAPER_MAX_ARTICLES = 7;
+export const NEWSPAPER_MIN_ARTICLES = 5;
+export const NEWSPAPER_MAX_THREAD_ARTICLES = 2;
+export const NEWSPAPER_RECENT_TURNS = 3;
+export const NEWSPAPER_RECENT_WEIGHT = 0.3;
+export const THREAD_MIN_TURNS = 2;
+export const THREAD_MAX_TURNS = 3;
+export const NEWS_LOW_HAPPINESS = 40;
+export const NEWS_HIGH_CORRUPTION = 30;
+export const NEWS_CORRUPTION_RESOLVED = 20;
+export const NEWS_AMBITIOUS_AIDE = 70;
+/** 遷移間近：成功条件のうち2つを満たし、残り1つがこの割合以上（W-08。記事 N-03） */
+export const NEWS_NEAR_TRANSITION_RATIO = 0.9;
+/** 数値をぼかすときの丸め単位 */
+export const NEWS_HEDGE_ROUNDING = 10;
+export const TRUTH_PENALTY_HEDGE = 0.1;
+export const TRUTH_PENALTY_EUPHEMISM = 0.2;
+export const TRUTH_PENALTY_PRAISE = 0.5;
+/** 側近報告での工期見積りの誤差（能力が低いほど大きい） */
+export const ESTIMATE_ERROR_DIVISOR = 200;
 
 // --- LLM ---
 export const LLM_TIMEOUT_MS = 5000;
@@ -170,9 +241,11 @@ export const LOG_MAX_ENTRIES = 5000;
 /** 判子アニメの長さ（SPEC §12.8：簡易1秒） */
 export const STAMP_ANIMATION_MS = 1000;
 export const PAPER_FADE_MS = 400;
+/** 投書欄の記事にこれだけとどまったら「参照した」と数える（v3.2 §3.2 の計測） */
+export const LETTERS_DWELL_MS = 1200;
 
 // --- セーブ ---
-export const SAVE_SCHEMA_VERSION = 1;
+export const SAVE_SCHEMA_VERSION = 2;
 export const SAVE_STORAGE_KEY = "imperial-decree/save";
 
 // --- シミュレーション（npm run sim 専用） ---

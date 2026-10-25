@@ -2,15 +2,45 @@
 // テンプレートパーサーの辞書・メタ命令パターンも言語依存の語彙としてここに置く。
 
 import type { Action, ParamKey, Target } from "../domain/Vocabulary";
+import type { BuildingId, Category, PolicyId } from "../domain/Buildings";
 import type { Faction, SelectionReason, Specialty } from "../domain/Aide";
 import type { GameOverReason } from "../domain/Ending";
-import type { FixedCostFailure, LLMFailureReason, NewspaperTone, NoopReason } from "../domain/TurnRecord";
+import type { EventKind } from "../domain/Events";
+import type { Section } from "../domain/News";
+import type { LLMFailureReason, NoopReason, OrderFailure, OrderLimit } from "../domain/TurnRecord";
 import type { IntentDirection } from "../domain/IntentDeclaration";
-import type { ScaleTagValue } from "../domain/Decree";
+import type { DeadlineTagValue, PriorityTagValue, ScaleTagValue } from "../domain/Decree";
 
 const fmt = (value: number): string => String(Math.round(value));
 const signed = (value: number): string => (value > 0 ? `+${fmt(value)}` : fmt(value));
 const percent = (ratio: number): string => `${Math.round(ratio * 100)}%`;
+const signedLevel = (level: number): string => (level > 0 ? `+${level}` : String(level));
+
+const TARGET_NAMES = {
+  residential: "住宅",
+  tenement: "長屋",
+  manor: "屋敷",
+  road: "道路",
+  well: "井戸",
+  granary: "倉庫",
+  market: "市場",
+  farm: "農地",
+  workshop: "工房",
+  office: "役所",
+  taxoffice: "徴税所",
+  courthouse: "裁判所",
+  clinic: "診療所",
+  school: "学校",
+  temple: "寺院",
+  watchtower: "見張り塔",
+  jail: "牢屋",
+  tax_rate: "税率",
+  welfare_policy: "福祉政策",
+  security_policy: "治安政策",
+} as const satisfies Record<Target, string>;
+
+/** 数え方：道路は「本」、ほかの建物は「棟」 */
+const unitOf = (building: string): string => (building === TARGET_NAMES.road ? "本" : "棟");
 
 export const messages = {
   params: {
@@ -21,16 +51,47 @@ export const messages = {
     corruption: "汚職率",
   } satisfies Record<ParamKey, string>,
 
-  targets: {
-    residential: "住宅",
-    road: "道路",
-    well: "井戸",
-    office: "役所",
-    market: "市場",
-    tax: "税",
-    welfare: "福祉",
+  /** 20 の target の名称（id は domain/Buildings.ts が単一情報源。網羅は型で保証） */
+  targets: TARGET_NAMES,
+
+  /** 地図のタイルの1文字アイコン（v3.2 §2.3 のタイル列） */
+  tileGlyphs: {
+    residential: "家",
+    tenement: "長",
+    manor: "邸",
+    road: "道",
+    well: "井",
+    granary: "倉",
+    market: "市",
+    farm: "畑",
+    workshop: "工",
+    office: "旗",
+    taxoffice: "徴",
+    courthouse: "裁",
+    clinic: "医",
+    school: "学",
+    temple: "寺",
+    watchtower: "塔",
+    jail: "牢",
+  } satisfies Record<BuildingId, string>,
+
+  categories: {
+    housing: "住宅",
+    infrastructure: "インフラ",
+    economy: "経済",
+    administration: "行政",
+    social: "社会",
     security: "治安",
-  } satisfies Record<Target, string>,
+  } satisfies Record<Category, string>,
+
+  policyLevel: (policy: PolicyId, from: number, to: number) =>
+    `${messages.targets[policy]}を${to > from ? "引き上げた" : "引き下げた"}（${signedLevel(from)} → ${signedLevel(to)}）`,
+
+  events: {
+    epidemic: "疫病",
+    famine: "凶作",
+    bandits: "盗賊",
+  } satisfies Record<EventKind, string>,
 
   actions: {
     build: "建設",
@@ -42,6 +103,8 @@ export const messages = {
   } satisfies Record<Action, string>,
 
   scaleTags: { small: "小", medium: "中", large: "大" } satisfies Record<ScaleTagValue, string>,
+  deadlineTags: { thisYear: "今年中", fewYears: "数年で", noRush: "急がず" } satisfies Record<DeadlineTagValue, string>,
+  priorityTags: { high: "高", normal: "中", low: "低" } satisfies Record<PriorityTagValue, string>,
 
   intentDirections: {
     increase: "増やす",
@@ -100,47 +163,65 @@ export const messages = {
       invalidCombination: "そのような命じ方では、執り行いようがございません",
       nonPositive: "減らせとの仰せでしたが、取り壊しは致しかねます",
     } satisfies Record<NoopReason, string>,
-    applied: "勅令は執行された",
-    budgetScaled: (ratio: number, cause: "treasury" | "budget") =>
-      cause === "treasury"
-        ? `予算不足のため規模を${percent(ratio)}に縮小`
-        : `指定の予算に合わせて規模を${percent(ratio)}に縮小`,
-    nothingAffordable: "予算が無く、何もできなかった",
-    officeBuilt: "役所が完成した",
-    marketBuilt: "市場が開かれた",
-    fixedCostFailed: (facility: string, reason: FixedCostFailure) => `${facility}は建たなかった（${messages.fixedCostFailures[reason]}）`,
+    ordered: (building: string, count: number, repair: boolean) =>
+      repair ? `${building}${count}${unitOf(building)}の修繕を発注した` : `${building}${count}${unitOf(building)}の普請を発注した`,
+    limited: (requested: number, count: number, limit: OrderLimit) =>
+      `${messages.orderLimits[limit]}のため ${requested} → ${count}`,
+    orderFailed: (building: string, reason: OrderFailure, detail: string | null) =>
+      `${building}は発注できなかった（${messages.orderFailures[reason](detail)}）`,
   },
 
-  fixedCostFailures: {
-    alreadyBuilt: "すでにある",
-    population: "人口が足りない",
-    infrastructure: "インフラが足りない",
-    treasury: "国庫が足りない",
-    budget: "指定の予算では足りない",
-    max: "これ以上は置けない",
-  } satisfies Record<FixedCostFailure, string>,
+  orderLimits: {
+    treasury: "予算不足",
+    budget: "指定の予算",
+    tiles: "用地不足",
+  } satisfies Record<OrderLimit, string>,
+
+  orderFailures: {
+    prerequisite: (detail: string | null) => `${detail ?? ""}がなければ建てられない`,
+    population: () => "人口が足りない",
+    maxCount: () => "これ以上は置けない",
+    treasury: () => "国庫が足りない",
+    budget: () => "指定の予算では足りない",
+    tiles: () => "用地がない",
+    nothingToRepair: () => "直すべきものが見当たらない",
+  } satisfies Record<OrderFailure, (detail: string | null) => string>,
 
   reports: {
     header: (aideName: string) => `${aideName}より御報告`,
     item: (param: string, delta: number) => `${param}は${signed(delta)}でございます`,
     nothingToReport: "特に申し上げることはございません",
     metaIgnored: "不遜な文言は聞かなかったことにいたします",
-    hollowDisclosed: (amount: number) => `立派な道に見えますが、${fmt(amount)}ほどは中身がございません`,
+    hollowDisclosed: (building: string, count: number) => `${building}のうち${count}${unitOf(building)}は、見かけ倒しで中身がございません`,
+    constructionEstimate: (building: string, count: number, turns: number | null) =>
+      turns === null
+        ? `${building}${count}${unitOf(building)}の普請は、いつ終わるとも知れません`
+        : `${building}${count}${unitOf(building)}の普請は、あと${turns}年ほどかと存じます`,
+    completed: (building: string, count: number, repair: boolean) =>
+      repair ? `${building}${count}${unitOf(building)}の修繕が終わりました` : `${building}${count}${unitOf(building)}が完成いたしました`,
+    materialShortage: (severe: boolean) =>
+      severe ? "資材がひどく足りず、手持ちで間に合わせております" : "資材が足りず、普請が滞っております",
+    overload: "人手に対して普請が多すぎ、現場が回っておりません",
+    event: {
+      started: (event: string) => `${event}が起きております。手当てを御命じください`,
+      ongoing: (event: string, turns: number) => `${event}は${turns}年目に入りました`,
+      resolved: (event: string) => `${event}は収まりました`,
+      expired: (event: string) => `${event}はようやく去りましたが、爪痕が残りました`,
+    },
   },
 
   newspaper: {
     title: (turn: number) => `辺境日報\u3000第${turn}年の暮れ`,
-    headline: {
-      neutral: { up: (p: string) => `${p}、増加`, down: (p: string) => `${p}、減少`, flat: (p: string) => `${p}、横ばい` },
-      euphemism: { up: (p: string) => `${p}、増加`, down: (p: string) => `${p}、わずかに調整`, flat: (p: string) => `${p}、安定` },
-      boast: { up: (p: string) => `${p}、躍進！`, down: (p: string) => `${p}、減少`, flat: (p: string) => `${p}、盤石` },
-    } satisfies Record<NewspaperTone, Record<"up" | "down" | "flat", (p: string) => string>>,
-    line: (param: string, value: number, trendWord: string) => `${param}はおよそ${fmt(value)}。${trendWord}`,
-    trendWords: {
-      neutral: { up: "前年より増えた。", down: "前年より減った。", flat: "前年並み。" },
-      euphemism: { up: "前年より増えた。", down: "やや落ち着いた。", flat: "変わらず安定。" },
-      boast: { up: "目覚ましい伸びだ。", down: "前年より減った。", flat: "揺るぎない。" },
-    } satisfies Record<NewspaperTone, Record<"up" | "down" | "flat", string>>,
+    sections: {
+      front: "第一面",
+      social: "社会",
+      economy: "経済",
+      administration: "行政",
+      security: "治安",
+      letters: "投書",
+      advertisement: "広告",
+      weather: "天候",
+    } satisfies Record<Section, string>,
     endings: {
       success: "村、ついに町へ　領主の治世を称える声",
       timeout: "村は町になれなかった",
@@ -197,6 +278,17 @@ export const messages = {
     title: "勅令都市",
     year: (turn: number) => `第${turn}年`,
     politicalCapital: "政治資本",
+    ledger: {
+      title: "領主の台帳",
+      value: {
+        population: (n: number) => `${n}人`,
+        treasury: (n: number) => `${n}`,
+        happiness: (n: number) => `${n}`,
+        infrastructure: (n: number) => `${n}`,
+        corruption: (n: number) => `${n}%`,
+      } satisfies Record<ParamKey, (n: number) => string>,
+      capital: (n: number, max: number) => `政治資本 ${n}／${max}`,
+    },
     newGame: "新しく始める",
     newGameConfirm: "今の領地を捨てて始め直しますか？",
     confirm: "始め直す",
@@ -217,14 +309,15 @@ export const messages = {
     },
     map: {
       legend: {
-        office: "役所",
         road: "道路",
-        residential: "住宅",
-        market: "市場",
+        construction: "普請中",
         empty: "空き地",
-        cracked: "見かけ倒し（報告で判明）",
       },
       note: "区画は役人が自動で割り振る。位置は指定できない",
+      worksTitle: "普請中の案件",
+      noWorks: "普請中の案件はない",
+      work: (building: string, count: number, repair: boolean, orderedTurn: number) =>
+        `${building}${repair ? "の修繕" : ""}×${count}（第${orderedTurn}年に発注）`,
     },
     aides: {
       params: { loyalty: "忠誠", ability: "能力", ambition: "野心", trust: "信頼" },
@@ -242,6 +335,9 @@ export const messages = {
       remaining: (n: number) => `残り ${n} 字`,
       tagTarget: "対象",
       tagScale: "規模",
+      tagDeadline: "期限",
+      tagPriority: "優先度",
+      tagHintNote: "期限・優先度は参謀への添え書き（執行には影響しない）",
       tagNone: "なし",
       tagCost: (n: number) => `タグは1つ${n}字`,
       marginLabel: "余白の書き添え（任意）",
@@ -266,13 +362,9 @@ export const messages = {
       fieldMagnitude: "規模",
       fieldTarget: "対象",
       fieldEffect: "効果",
+      fieldCount: "棟数",
       fieldBudget: "予算",
       noInterpretation: "勅令は誰にも届かなかった",
-      facilities: {
-        office: "役所が建った",
-        market: (n: number) => `市場が${n}つ増えた`,
-        housing: (n: number) => `住宅区画が${n}増えた`,
-      },
       noChange: "目に見える変化はない",
       memo: "余白の覚え書き",
     },
@@ -298,25 +390,41 @@ export const messages = {
   /** テンプレートパーサーの語彙（DECISIONS D-35）。先に書いたものが優先 */
   parser: {
     targetKeywords: [
+      ["徴税所", "taxoffice"],
+      ["税率", "tax_rate"],
+      ["裁判", "courthouse"],
+      ["診療", "clinic"],
+      ["医", "clinic"],
+      ["学校", "school"],
+      ["寺", "temple"],
+      ["見張", "watchtower"],
+      ["塔", "watchtower"],
+      ["牢", "jail"],
       ["役所", "office"],
       ["庁舎", "office"],
       ["市場", "market"],
-      ["市", "market"],
+      ["工房", "workshop"],
+      ["倉", "granary"],
+      ["蔵", "granary"],
+      ["畑", "farm"],
+      ["農", "farm"],
       ["井戸", "well"],
       ["水", "well"],
+      ["長屋", "tenement"],
+      ["屋敷", "manor"],
       ["住宅", "residential"],
       ["住居", "residential"],
       ["家", "residential"],
       ["道", "road"],
       ["橋", "road"],
-      ["税", "tax"],
-      ["年貢", "tax"],
-      ["福祉", "welfare"],
-      ["施し", "welfare"],
-      ["祭", "welfare"],
-      ["治安", "security"],
-      ["汚職", "security"],
-      ["取締", "security"],
+      ["税", "tax_rate"],
+      ["年貢", "tax_rate"],
+      ["福祉", "welfare_policy"],
+      ["施し", "welfare_policy"],
+      ["祭", "welfare_policy"],
+      ["治安", "security_policy"],
+      ["汚職", "security_policy"],
+      ["取締", "security_policy"],
     ] as const satisfies readonly (readonly [string, Target])[],
     actionKeywords: [
       ["減税", "tax"],
@@ -335,7 +443,15 @@ export const messages = {
       ["作", "build"],
     ] as const satisfies readonly (readonly [string, Action])[],
     /** 含まれていれば magnitude を負にする語 */
-    negativeKeywords: ["減税", "免除", "軽く", "下げ"] as const,
+    negativeKeywords: ["減税", "免除", "軽く", "下げ", "緩め"] as const,
+    /** 「三つ」などの数（n 棟 → magnitude = MAGNITUDE_PER_BUILDING × n。W-12） */
+    countKeywords: [
+      ["一", 1],
+      ["二", 2],
+      ["三", 3],
+    ] as const satisfies readonly (readonly [string, number])[],
+    /** 数を数える助数詞（「三つ」「二棟」） */
+    counters: ["つ", "棟", "軒", "か所"] as const,
     largeKeywords: ["大いに", "大規模", "多く", "盛大"] as const,
     smallKeywords: ["少し", "わずか", "小規模"] as const,
   },

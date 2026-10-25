@@ -1,22 +1,24 @@
 import { Effect, Layer } from "effect";
 import { describe, expect, it } from "vitest";
+import { BUILDINGS } from "../domain/Buildings";
 import {
   DECREE_BASE_COST,
   INITIAL_POLITICAL_CAPITAL,
   MAX_TURNS,
-  NEWSPAPER_BIAS,
+  NEWSPAPER_MAX_ARTICLES as MAX_ARTICLES,
+  NEWSPAPER_MIN_ARTICLES as MIN_ARTICLES,
   POLITICAL_CAPITAL_MAX,
 } from "../domain/constants";
 import type { Decree } from "../domain/Decree";
 import type { DecreeIntent } from "../domain/DecreeIntent";
 import type { GameState } from "../domain/GameState";
-import { PARAM_KEYS } from "../domain/Vocabulary";
 import { GameOverError, ValidationError } from "../services/errors";
 import { LLMServiceMock, LLMServiceUnavailable } from "../services/LLMService";
 import { makeSaveServiceInMemory, SaveService } from "../services/SaveService";
 import { baseLayer, fixedLLMLayer, intentOf } from "../test/fixtures";
 import { renderNewspaper } from "./Newspaper";
 import { buildThreeTierView, renderThreeTier } from "./ResultView";
+import { buildCountFor } from "./RuleEngine";
 import { appoint, appointmentCandidates, dismiss, newGame, playTurn } from "./TurnMachine";
 
 const decree: Decree = { text: "道を造れ", tags: [] };
@@ -39,8 +41,8 @@ const playOnce = (state: GameState, input: Decree = decree, intent: Partial<Decr
 
 const mixed: Partial<DecreeIntent>[] = [
   { target: "road", magnitude: 40 },
-  { action: "tax", target: "tax", magnitude: 30 },
-  { action: "invest", target: "welfare", magnitude: 30 },
+  { action: "tax", target: "tax_rate", magnitude: 30 },
+  { action: "invest", target: "welfare_policy", magnitude: 30 },
   { target: "residential", magnitude: 40 },
 ];
 
@@ -109,7 +111,8 @@ describe("playTurn", () => {
     );
     const record = state.history[0];
     if (!record) throw new Error("記録がない");
-    expect(record.execution.cost).toBe(200);
+    expect(record.execution.cost).toBe(BUILDINGS.road.cost * buildCountFor(50));
+    expect(record.execution.notes[0]).toMatchObject({ kind: "ordered", building: "road" });
     expect(record.interpretation?.source).toBe("llm");
     expect(record.aideAdjustment?.aideId).toBe("elderSteward");
     expect(record.aideAdjustment?.reason).toBe("specialty");
@@ -157,20 +160,31 @@ describe("playTurn", () => {
   });
 
   it("50ターンで必ず終わる", async () => {
-    const state = await runTurns(5, MAX_TURNS + 5, [{ action: "invest", target: "welfare", magnitude: 10 }]);
+    const state = await runTurns(5, MAX_TURNS + 5, [{ action: "invest", target: "welfare_policy", magnitude: 10 }]);
     expect(state.ending).not.toBeNull();
     expect(state.turn - 1).toBeLessThanOrEqual(MAX_TURNS);
   });
 
-  it("新聞の数値は実数値の ±30% 以内", async () => {
+  it("新聞は毎年5〜7本、本文は空でなく、TurnRecord から真実度を取り出せる", async () => {
     const state = await runTurns(11, 15, mixed);
     for (const record of state.history) {
-      for (const line of record.newspaper.lines) {
-        const actual = record.after[line.param];
-        expect(Math.abs(line.reportedValue - actual)).toBeLessThanOrEqual((Math.abs(actual) * NEWSPAPER_BIAS) / 100 + 1e-9);
+      const articles = record.newspaper.articles;
+      expect(articles.length).toBeGreaterThanOrEqual(MIN_ARTICLES);
+      expect(articles.length).toBeLessThanOrEqual(MAX_ARTICLES);
+      for (const article of articles) {
+        expect(article.body.join("").length).toBeGreaterThan(0);
+        expect(article.truthfulness).toBeGreaterThanOrEqual(0);
+        expect(article.truthfulness).toBeLessThanOrEqual(1);
       }
-      expect(renderNewspaper(record.newspaper).lines).toHaveLength(PARAM_KEYS.length);
+      expect(renderNewspaper(record.newspaper).articles).toHaveLength(articles.length);
+      expect(record.derived.housingCapacity).toBeGreaterThanOrEqual(0);
     }
+  });
+
+  it("新聞の連載状態と直近テンプレートは GameState に保存される", async () => {
+    const state = await runTurns(11, 6, mixed);
+    expect(state.newspaperState.recentTemplates.length).toBeGreaterThan(0);
+    for (const entry of state.newspaperState.recentTemplates) expect(entry.turn).toBeGreaterThanOrEqual(state.turn - 1 - 3);
   });
 });
 

@@ -1,26 +1,29 @@
 import type { SelectionReason } from "./Aide";
+import type { BuildingId, PolicyId, Target } from "./Buildings";
 import type { Decree } from "./Decree";
 import type { DecreeIntent, IntentSource } from "./DecreeIntent";
+import type { DerivedStats } from "./DerivedStats";
 import type { Ending } from "./Ending";
-import type { Facilities, ParamDelta, Params } from "./GameState";
+import type { EventKind } from "./Events";
+import type { ParamDelta, Params } from "./GameState";
 import type { IntentDeclaration, IntentEvaluation } from "./IntentDeclaration";
-import type { ParamKey, Target } from "./Vocabulary";
+import type { Newspaper } from "./News";
+import type { NoopReason, ParamKey } from "./Vocabulary";
 
-// 1ターンの記録（SPEC §11.4 TurnRecord）。3段表示＋意図比較はここから組み立てる。
+export type { NoopReason } from "./Vocabulary";
+
+// 1ターンの記録（SPEC §11.4 TurnRecord ＋ v3.2 ＋ v3.3）。3段表示＋意図比較はここから組み立てる。
+// 派生指標・新聞の truthfulness・資材などの秘匿値も分析用に入っているが、UI には出さない（CLAUDE.md §4-13）。
 
 /** ① 参謀の解釈 */
 export interface Interpretation {
   readonly intent: DecreeIntent;
   readonly source: IntentSource;
-  /** メタ命令を取り除いたか（DECISIONS D-34） */
   readonly metaRemoved: boolean;
-  /** 範囲外で clamp したフィールド（P-03） */
   readonly clampedFields: readonly string[];
-  /** LLM が使えずテンプレートに切り替えた理由 */
   readonly fallbackReason: LLMFailureReason | null;
 }
 
-/** rateLimited / rejected は再試行しても結果が変わらないので、すぐテンプレートに切り替える */
 export type LLMFailureReason = "timeout" | "network" | "invalidJson" | "schemaViolation" | "rateLimited" | "rejected";
 
 export type Distortion =
@@ -33,39 +36,77 @@ export interface AideAdjustment {
   readonly aideId: string;
   readonly reason: SelectionReason;
   readonly accuracy: number;
+  /** 行政能力による精度の加算（v3.2 §2.5） */
+  readonly adminBonus: number;
   readonly specialtyMatch: boolean;
   readonly factionConflict: boolean;
   readonly distortions: readonly Distortion[];
-  /** 誤読・取り違えを反映した指示 */
   readonly adjustedIntent: DecreeIntent;
-  /** 骨抜きによる効果倍率（コストには掛からない） */
+  /** 骨抜きによる効果倍率（1 または WATER_DOWN_EFFECT_FACTOR） */
   readonly effectFactor: number;
 }
 
-export type NoopReason = "unknownTarget" | "lowConfidence" | "appointDismiss" | "invalidCombination" | "nonPositive";
-export type FixedCostFailure = "alreadyBuilt" | "population" | "infrastructure" | "treasury" | "budget" | "max";
+/** 発注できなかった理由（V-09） */
+export type OrderFailure =
+  | "prerequisite"
+  | "population"
+  | "maxCount"
+  | "treasury"
+  | "budget"
+  | "tiles"
+  | "nothingToRepair";
+
+/** 棟数を減らした理由（A-07 / V-07） */
+export type OrderLimit = "treasury" | "budget" | "tiles";
 
 export type ExecutionNote =
   | { readonly kind: "noAide" }
   | { readonly kind: "noop"; readonly reason: NoopReason }
-  | { readonly kind: "applied" }
-  | { readonly kind: "budgetScaled"; readonly ratio: number; readonly cause: "treasury" | "budget" }
-  | { readonly kind: "nothingAffordable" }
-  | { readonly kind: "officeBuilt" }
-  | { readonly kind: "officeFailed"; readonly reason: FixedCostFailure }
-  | { readonly kind: "marketBuilt" }
-  | { readonly kind: "marketFailed"; readonly reason: FixedCostFailure };
+  | {
+      readonly kind: "ordered";
+      readonly building: BuildingId;
+      readonly requested: number;
+      readonly count: number;
+      readonly repair: boolean;
+      readonly limitedBy: OrderLimit | null;
+      readonly cost: number;
+    }
+  | { readonly kind: "orderFailed"; readonly building: BuildingId; readonly reason: OrderFailure; readonly detail: BuildingId | null }
+  | { readonly kind: "policyChanged"; readonly policy: PolicyId; readonly from: number; readonly to: number };
 
 /** 勅令の実行結果（自然変化の前） */
 export interface Execution {
   readonly notes: readonly ExecutionNote[];
   /** 勅令による国庫支出（DECREE_BASE_COST を除く） */
   readonly cost: number;
-  /** 予算による縮小率（1=縮小なし） */
-  readonly scale: number;
-  /** 骨抜きで失われ「空洞」になったインフラ量 */
-  readonly hollowAdded: number;
+  /** 基本コストを取ったか（無効・前提未達は取らない。W-11） */
+  readonly baseCostCharged: boolean;
 }
+
+/** その年に完成した工事（v3.3） */
+export interface Completion {
+  readonly building: BuildingId;
+  readonly count: number;
+  readonly repair: boolean;
+  /** 完成時に空洞になった棟数（分析用。プレイヤーには見せない） */
+  readonly hollowCount: number;
+}
+
+/** その年の工事の状況（分析用。秘匿値を含む） */
+export interface ConstructionReport {
+  readonly laborForce: number;
+  readonly laborDemand: number;
+  readonly overload: number;
+  readonly materialShortage: number;
+  readonly completions: readonly Completion[];
+  readonly materialsAfter: { readonly wood: number; readonly stone: number };
+}
+
+export type EventNote =
+  | { readonly kind: "started"; readonly event: EventKind }
+  | { readonly kind: "ongoing"; readonly event: EventKind; readonly turns: number }
+  | { readonly kind: "resolved"; readonly event: EventKind }
+  | { readonly kind: "expired"; readonly event: EventKind };
 
 export interface ReportItem {
   readonly param: ParamKey;
@@ -75,7 +116,12 @@ export interface ReportItem {
 export type ReportNote =
   | { readonly kind: "execution"; readonly note: ExecutionNote }
   | { readonly kind: "metaIgnored" }
-  | { readonly kind: "hollowDisclosed"; readonly amount: number };
+  | { readonly kind: "hollowDisclosed"; readonly building: BuildingId; readonly count: number }
+  | { readonly kind: "constructionEstimate"; readonly building: BuildingId; readonly count: number; readonly turns: number | null }
+  | { readonly kind: "completed"; readonly building: BuildingId; readonly count: number; readonly repair: boolean }
+  | { readonly kind: "materialShortage"; readonly severe: boolean }
+  | { readonly kind: "overload" }
+  | { readonly kind: "event"; readonly note: EventNote };
 
 /** 側近報告（実数値の変化を報告。欠落・隠蔽あり。DECISIONS D-28） */
 export interface AideReport {
@@ -84,32 +130,14 @@ export interface AideReport {
   readonly notes: readonly ReportNote[];
   /** 隠蔽・欠落で報告から消えた項目。分析用でプレイヤーには見せない */
   readonly hiddenItems: readonly ReportItem[];
-  /** 隠蔽が起きたか。分析用でプレイヤーには見せない（3段表示にも出さない） */
+  /** 隠蔽が起きたか。分析用でプレイヤーには見せない */
   readonly concealed: boolean;
-}
-
-export type NewspaperTone = "neutral" | "euphemism" | "boast";
-
-export interface NewspaperLine {
-  readonly param: ParamKey;
-  /** 偏向ノイズ込みの報道値 */
-  readonly reportedValue: number;
-  readonly trend: "up" | "down" | "flat";
-  readonly tone: NewspaperTone;
-}
-
-export interface NewspaperArticle {
-  readonly turn: number;
-  readonly headline: NewspaperLine | null;
-  readonly lines: readonly NewspaperLine[];
-  readonly ending: Ending | null;
 }
 
 export interface TurnRecord {
   readonly turn: number;
   readonly decree: Decree;
   readonly intentDeclaration: IntentDeclaration | null;
-  /** 側近不在で勅令が実行されなかった場合は null */
   readonly interpretation: Interpretation | null;
   readonly aideAdjustment: AideAdjustment | null;
   readonly execution: Execution;
@@ -117,12 +145,16 @@ export interface TurnRecord {
   readonly after: Params;
   /** ③ 実際の結果（ボーナス込みのターン全体の変化） */
   readonly actualResult: ParamDelta;
-  readonly facilitiesBefore: Facilities;
-  readonly facilitiesAfter: Facilities;
+  readonly construction: ConstructionReport;
+  readonly events: readonly EventNote[];
+  /** 年末の派生指標（UI 非表示） */
+  readonly derived: DerivedStats;
+  /** その年の税収と支出（新聞の「税収増」判定にも使う） */
+  readonly finance: { readonly taxRevenue: number; readonly upkeep: number };
   /** ④ 意図比較（宣言時のみ） */
   readonly intentEvaluation: IntentEvaluation | null;
   readonly bonusHappiness: number;
-  readonly newspaper: NewspaperArticle;
+  readonly newspaper: Newspaper;
   readonly aideReports: readonly AideReport[];
   readonly ending: Ending | null;
 }

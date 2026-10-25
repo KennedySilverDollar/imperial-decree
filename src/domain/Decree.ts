@@ -1,13 +1,24 @@
 import { DECREE_CHAR_LIMIT, MAX_TAGS, TAG_CHAR_COST } from "./constants";
 import type { Target } from "./Vocabulary";
 
-// 勅令（SPEC §6.1 / A-06）。タグは「対象」「規模」の2種のみ、各1個まで。
+// 勅令（SPEC §6.1 / v3.2 の指示で A-06 を改定：DECISIONS I-30）。
+// タグは「対象」「規模」「期限」「優先度」の4種、各1個まで、1つ5文字。
+// 期限・優先度は参謀への添え書きで、ゲーム上の効果はない（DecreeIntent に対応する項目がない）。
 
-export type ScaleTagValue = "small" | "medium" | "large";
+export const SCALE_TAG_VALUES = ["small", "medium", "large"] as const;
+export type ScaleTagValue = (typeof SCALE_TAG_VALUES)[number];
+export const DEADLINE_TAG_VALUES = ["thisYear", "fewYears", "noRush"] as const;
+export type DeadlineTagValue = (typeof DEADLINE_TAG_VALUES)[number];
+export const PRIORITY_TAG_VALUES = ["high", "normal", "low"] as const;
+export type PriorityTagValue = (typeof PRIORITY_TAG_VALUES)[number];
 
 export type DecreeTag =
   | { readonly kind: "target"; readonly value: Target }
-  | { readonly kind: "scale"; readonly value: ScaleTagValue };
+  | { readonly kind: "scale"; readonly value: ScaleTagValue }
+  | { readonly kind: "deadline"; readonly value: DeadlineTagValue }
+  | { readonly kind: "priority"; readonly value: PriorityTagValue };
+
+export const TAG_KINDS = ["target", "scale", "deadline", "priority"] as const satisfies readonly DecreeTag["kind"][];
 
 export interface Decree {
   readonly text: string;

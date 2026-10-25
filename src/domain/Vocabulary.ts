@@ -1,16 +1,8 @@
-// 勅令の語彙（A-03 の target 8種、SPEC §11.2 の action 6種）とパラメータ名
+// 勅令の語彙と action × target の有効組合せ表（DECISIONS §11.4 / CLAUDE.md §4-15）
+import { BUILDING_IDS, isBuildingId, POLICY_IDS, TARGETS, type BuildingId, type PolicyId, type Target } from "./Buildings";
 
-export const TARGETS = [
-  "residential",
-  "road",
-  "well",
-  "office",
-  "market",
-  "tax",
-  "welfare",
-  "security",
-] as const;
-export type Target = (typeof TARGETS)[number];
+export { BUILDING_IDS, POLICY_IDS, TARGETS, isTarget, isBuildingId, isPolicyId } from "./Buildings";
+export type { BuildingId, PolicyId, Target } from "./Buildings";
 
 export const ACTIONS = ["build", "tax", "invest", "reform", "appoint", "dismiss"] as const;
 export type Action = (typeof ACTIONS)[number];
@@ -18,42 +10,50 @@ export type Action = (typeof ACTIONS)[number];
 export const PARAM_KEYS = ["population", "treasury", "happiness", "infrastructure", "corruption"] as const;
 export type ParamKey = (typeof PARAM_KEYS)[number];
 
-export const isTarget = (value: string): value is Target => (TARGETS as readonly string[]).includes(value);
 export const isAction = (value: string): value is Action => (ACTIONS as readonly string[]).includes(value);
 
-/** target ごとに有効な action（BALANCE §3）。action=tax は target を問わず増減税として扱う */
-export const ALLOWED_ACTIONS: Readonly<Record<Target, readonly Action[]>> = {
-  road: ["build", "invest"],
-  well: ["build", "invest"],
-  residential: ["build", "invest"],
-  market: ["build", "invest"],
-  office: ["build"],
-  tax: ["tax", "reform"],
-  welfare: ["invest", "reform"],
-  security: ["invest", "reform"],
+export type NoopReason = "unknownTarget" | "lowConfidence" | "appointDismiss" | "invalidCombination" | "nonPositive";
+
+/** 組合せ表を引いた結果 */
+export type Resolution =
+  | { readonly kind: "construct"; readonly building: BuildingId; readonly repairFirst: boolean }
+  | { readonly kind: "policy"; readonly policy: PolicyId; readonly direction: 1 | -1 }
+  | { readonly kind: "noop"; readonly reason: NoopReason };
+
+/**
+ * action × target の有効組合せ（DECISIONS §11.4）。
+ * - action=tax は target を問わず税率の上げ下げ（v3.1 の扱いを踏襲）
+ * - 建物：build=新築、invest=空洞の修繕を優先して新築（W-10）、reform は無効、負の規模（取り壊し）は無効
+ * - 政策：invest/reform は符号どおり、build は reform と読み替え
+ */
+export const resolveCombination = (action: Action, target: Target | null, magnitude: number): Resolution => {
+  if (action === "appoint" || action === "dismiss") return { kind: "noop", reason: "appointDismiss" };
+  if (target === null) return { kind: "noop", reason: "unknownTarget" };
+  if (action === "tax") {
+    if (magnitude === 0) return { kind: "noop", reason: "nonPositive" };
+    return { kind: "policy", policy: "tax_rate", direction: magnitude > 0 ? 1 : -1 };
+  }
+  if (isBuildingId(target)) {
+    if (action === "reform") return { kind: "noop", reason: "invalidCombination" };
+    if (magnitude <= 0) return { kind: "noop", reason: "nonPositive" };
+    return { kind: "construct", building: target, repairFirst: action === "invest" };
+  }
+  if (magnitude === 0) return { kind: "noop", reason: "nonPositive" };
+  return { kind: "policy", policy: target, direction: magnitude > 0 ? 1 : -1 };
 };
 
-/** action ごとに取り違え先になりうる target（BALANCE §4.4） */
+/** action ごとに取り違え先になりうる target（BALANCE §4.4 を20種に拡張） */
 export const SWAPPABLE_TARGETS: Readonly<Record<Action, readonly Target[]>> = {
-  build: ["residential", "road", "well", "office", "market"],
-  invest: ["road", "well", "residential", "market", "welfare", "security"],
-  reform: ["tax", "welfare", "security"],
+  build: BUILDING_IDS,
+  invest: [...BUILDING_IDS, "welfare_policy", "security_policy"],
+  reform: POLICY_IDS,
   tax: [],
   appoint: [],
   dismiss: [],
 };
 
 /** テンプレートパーサーで action が読み取れなかったときの既定 action */
-export const DEFAULT_ACTION_FOR_TARGET: Readonly<Record<Target, Action>> = {
-  road: "build",
-  well: "build",
-  residential: "build",
-  market: "build",
-  office: "build",
-  tax: "tax",
-  welfare: "invest",
-  security: "invest",
-};
+export const defaultActionFor = (target: Target): Action =>
+  target === "tax_rate" ? "tax" : isBuildingId(target) ? "build" : "invest";
 
-export const isAllowedCombination = (action: Action, target: Target): boolean =>
-  action === "tax" || ALLOWED_ACTIONS[target].includes(action);
+export const ALL_TARGETS: readonly Target[] = TARGETS;
