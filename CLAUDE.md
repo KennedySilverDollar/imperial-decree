@@ -27,7 +27,7 @@
   - `node scripts/fake-mistral.mjs [port]`：キーなしで結線を確かめるための偽 Mistral（LLM ではない）
   - `npm run typecheck`：`tsc -b --noEmit`
   - `npm run lint`：ESLint。`Math.random` 禁止、`src/domain` からの effect/phaser/react import 禁止を含む
-  - `npm run sim -- [ゲーム数]`：ヘッドレスシミュレーション（既定1000ゲーム×3方策）。A-02 の合否を PASS/FAIL で出力。結果は `docs/BALANCE.md` §11
+  - `npm run sim -- [ゲーム数]`：ヘッドレスシミュレーション（既定1000ゲーム×3方策）。A-02 の合否（ヒューリスティック到達率）を PASS/FAIL で出力し、建物利用エントロピー・新聞の検閲削除率・イベント解決率なども出す。結果は `docs/BALANCE.md` §11（v3.1）・§28（v3.2＋v3.3）
 - パッケージ管理は **npm に統一**（`package-lock.json` をコミットする。pnpm / yarn は使わない。依存の追加は `npm install <pkg>`、CI やクリーン環境では `npm ci`）
 - バージョン固定（AMENDMENT A-10）：Effect `~3.22.4`、TypeScript `5.9.2`（完全固定）、Phaser `~4.2.1`。Effect 4.x は `Context.Tag` が廃止されているため使わない。理由は `docs/DECISIONS.md` D-56
 
@@ -52,6 +52,7 @@ src/domain/Construction.ts     工事台帳（案件・進捗）と労働・資�
 src/domain/Events.ts           ランダムイベント3種（疫病・凶作・盗賊）の定義
 src/engine/DerivedCalculator.ts
 src/engine/NewspaperGenerator.ts   決定論の新聞生成（seed付きPRNG）
+src/engine/IntentSchema.ts         action/target の Effect Schema と、そこから生成する JSON Schema（プロキシも使う）
 ```
 
 ## 4. アーキテクチャ上の不変条件（破らない）
@@ -60,7 +61,7 @@ src/engine/NewspaperGenerator.ts   決定論の新聞生成（seed付きPRNG）
 3. **決定論性**：乱数は `Rng` サービス経由（seed付き）。同じ seed・同じ入力・同じLLM出力なら同じ結果になること。`Math.random()` 直呼び禁止。
 4. **`domain/` は純粋**。Effect・DOM・Phaser・fetchをimportしない。
 5. **UIにゲームロジックを書かない。** UIは `TurnMachine` を呼んで状態を描画するだけ。
-6. **文言は全て `i18n/messages.ts`**。UIやエンジンに日本語リテラルを直書きしない（テンプレ新聞の文面も含む）。
+6. **文言は全て `i18n/messages.ts`**（新聞の記事テンプレートだけは `src/content/newspaper/` のデータ。DECISIONS I-15）。UIやエンジンに日本語リテラルを直書きしない。
 7. **バランス値は `domain/constants.ts` に集約**。マジックナンバー禁止（歪み確率、税率、人口増加率、ボーナス量、文字数上限など）。
 8. **LLM障害時もゲームを止めない**：タイムアウト5秒、リトライ2回（指数バックオフ）、失敗時はテンプレートパーサーにフォールバック。
 9. **APIキーをフロントに置かない。** JSON Schemaはプロキシ側で固定し、フロントから改ざんできない構造にする。

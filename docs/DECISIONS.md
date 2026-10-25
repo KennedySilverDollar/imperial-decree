@@ -453,3 +453,29 @@ P1 の指示（「Phase 0 の承認済み内容に従って実装」）を受け
 
 ### 12.6 確認をお願いしたい点
 2026-10-25 にユーザーが「推奨案で進める」と回答。Z-01〜Z-16 はすべて推奨案で確定した。
+
+---
+
+## 13. P1（v3.2＋v3.3）実装で決めた細部（記録のみ・2026-10-25）
+
+§11・§12 の承認済み推奨案（Z-01〜Z-16 を含む）の範囲で、実装中に決めた細部。異論があれば差し戻してください。
+
+| ID | 論点 | 決定 | 影響範囲 |
+|----|------|------|----------|
+| I-13 | 空洞の役所は成功条件の「役所あり」に数えるか | **数える**（建っていれば見かけ倒しでも町への昇格条件は満たす。プレイヤーには空洞が見えないため、見えない理由で勝てないのを避ける） | TurnMachine, Ending |
+| I-14 | 建物ごとの数値（費用・維持費・効果・前提・建材・工期）の置き場 | `domain/Buildings.ts` の `BUILDINGS` 表（enum の単一ソースと同じ場所）。`constants.ts` には全体倍率と共通の値だけを置く（CLAUDE.md §4-7 の「表は Buildings.ts」） | Buildings, constants |
+| I-15 | 新聞テンプレートの日本語の置き場 | `src/content/newspaper/ja.ts`（データ）。messages.ts と並ぶ文言の置き場とし、エンジンには日本語を書かない（CLAUDE.md §4-6 の例外として明記） | content, NewspaperGenerator |
+| I-16 | 道路の描き方 | 道路は中央の十字（`ROAD_TILE_MAX`=19 区画）に `floor(インフラ/5)` 本描き、区画を占めない。建物の区画は残り80＋役所の1区画 | Map |
+| I-17 | 旧 `engine/Newspaper.ts` | `NewspaperGenerator.ts` の再エクスポートとして残す（既存の import を壊さない） | engine |
+| I-18 | JSON Schema の生成 | target / action の Effect Schema（`engine/IntentSchema.ts`）から `JSONSchema.make` で生成し、プロキシの Structured Outputs もそれを使う。出所は `domain/Buildings.ts` の20種だけ | IntentSchema, proxy/schema |
+| I-19 | 修繕 | `invest` は空洞の建物があれば修繕を優先（費用・工程は半分）。`build` は常に新築（Z-14） | RuleEngine |
+| I-20 | 勅令の基本コスト | 執行されたとき（発注または政策変更）だけ取る。no-op・前提未達・国庫不足の不成立では取らない（W-11） | TurnMachine, RuleEngine |
+| I-21 | sim の合否 | 承認済みの A-02 / P-08 に従い、**ヒューリスティック到達 70〜90% のみ**で判定する。v3.2 の指示にあった「到達 30〜50%・GO 20〜40%」と GO 率は参考として出力する | scripts/sim.ts |
+| I-22 | コマンド | v3.2 の指示の `pnpm test` などは `npm test` / `npm run typecheck` / `npm run lint` / `npm run sim` に読み替える（npm に統一済み） | — |
+| I-23 | 連載の再燃 | 終わった連載は `THREAD_MAX_TURNS` 年のあいだ再開しない（同じ話題が毎年始まらないように） | NewspaperGenerator |
+| I-24 | 数値のヘッジ | 数値スロットのある記事は、思想的偏向/100 × 感度 の確率で10の位に丸め、「概ね」などのヘッジ語を付ける。真実度 −0.1。婉曲化は −0.2、称賛への反転は −0.5 | NewspaperGenerator |
+| I-25 | 称賛への反転（官僚圧力） | P1 の最小テンプレート集では反転文面を持つのは汚職の記事（N-11）だけ。sim のヒューリスティックでは汚職率30超がまれなので、反転率は 0.0% になる。P2 で行政面の記事に反転文面を足す | content |
+| I-26 | 遷移間近の記事（W-08） | 最小テンプレート集に入れていない。未使用の定数 `NEWS_NEAR_TRANSITION_RATIO` は削除し、P2 で記事と一緒に戻す | constants, content |
+| I-27 | 政策の継続期間 | 勅令を出した年を1年目として4年間保ち、5年目から1年に1段ずつ0へ戻る | RuleEngine |
+| I-28 | UI（P1 での最小対応） | 地図はカテゴリの地色＋1文字の記号（普請中は薄く）、新聞は複数記事を欄ごとに並べる、3段表示は棟数の縮小を朱色の訂正線で出す。台帳の労働人口・工事一覧などの本格的な UI は P2 | ui |
+| I-29 | 参謀プロンプト | 20種の target の説明と、「n 棟 → magnitude = 34×n（最大3棟）」の指示を追加。勅令本文は引き続きユーザーメッセージとして分離 | proxy/prompt |
