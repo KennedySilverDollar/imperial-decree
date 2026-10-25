@@ -51,37 +51,45 @@ export const ALL_AIDE_PROFILES: readonly AideProfile[] = [...INITIAL_AIDE_PROFIL
 
 export const makeAide = (profile: AideProfile, appointedTurn: number): Aide => ({ ...profile, appointedTurn });
 
+/** 専門一致表（DECISIONS §11.4 / X-05）。表にない target（学校・寺院・福祉政策）は誰とも一致しない */
 const SPECIALTY_TARGETS: Readonly<Record<Specialty, readonly Target[]>> = {
-  infrastructure: ["residential", "road", "well", "office", "market"],
-  economy: ["tax", "market", "security"],
-  security: ["welfare", "security"],
-  environment: ["well"],
+  infrastructure: ["residential", "tenement", "manor", "road", "well", "granary", "office"],
+  economy: ["market", "farm", "workshop", "taxoffice", "tax_rate"],
+  security: ["courthouse", "watchtower", "jail", "security_policy"],
+  environment: ["well", "farm", "granary", "clinic"],
 };
 
 export const isSpecialtyMatch = (aide: Aide, action: Action, target: Target | null): boolean =>
   (action === "tax" && aide.specialty === "economy") ||
   (target !== null && SPECIALTY_TARGETS[aide.specialty].includes(target));
 
-/** 派閥対立（BALANCE §4.3） */
+/** 派閥対立（BALANCE §4.3 を20種に拡張） */
 export const isFactionConflict = (aide: Aide, action: Action, target: Target | null, magnitude: number): boolean => {
+  const raisesTax = (action === "tax" && magnitude > 0) || (target === "tax_rate" && magnitude > 0) || target === "taxoffice";
   switch (aide.faction) {
     case "development":
-      return (action === "build" || action === "invest" || action === "tax") && magnitude < 0;
+      // 開発派：縮小（負の規模）を嫌う
+      return magnitude < 0;
     case "commerce":
-      return (action === "tax" && magnitude > 0) || target === "security";
+      // 商業派：増税と取り締まり（治安政策・裁判所）を嫌う
+      return raisesTax || target === "security_policy" || target === "courthouse";
     case "conservative":
-      return action === "build" && magnitude > CONSERVATIVE_LARGE_MAGNITUDE;
+      // 保守派：急な大事業と、長屋・工房のような新しい暮らしを嫌う
+      return (action === "build" && magnitude > CONSERVATIVE_LARGE_MAGNITUDE) || target === "tenement" || target === "workshop";
     case "military":
-      return target === "welfare";
+      // 軍事派：施しを嫌う
+      return target === "welfare_policy";
     case "environment":
-      return action === "build" && target === "road" && magnitude > 0;
+      // 環境派：道を通すこと・工房を嫌う
+      return (target === "road" || target === "workshop") && magnitude > 0;
   }
 };
 
-/** 解釈精度（SPEC §7.6 / A-04） */
-export const computeAccuracy = (aide: Aide, specialtyMatch: boolean, factionConflict: boolean): number =>
+/** 解釈精度（SPEC §7.6 / A-04 ＋ 行政能力の加算 X-06） */
+export const computeAccuracy = (aide: Aide, specialtyMatch: boolean, factionConflict: boolean, adminBonus = 0): number =>
   clamp(
-    ACCURACY_BASE +
+    adminBonus +
+      ACCURACY_BASE +
       aide.ability / ACCURACY_ABILITY_DIVISOR +
       (specialtyMatch ? ACCURACY_SPECIALTY_BONUS : 0) +
       (aide.trust >= ACCURACY_TRUST_THRESHOLD ? ACCURACY_TRUST_BONUS : 0) -

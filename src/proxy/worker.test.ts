@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { LLM_TEMPERATURE } from "../domain/constants";
+import { TARGETS } from "../domain/Buildings";
 import { makeRateLimiter } from "./rateLimit";
 import { handleRequest, type ProxyEnv } from "./worker";
 
@@ -75,7 +76,8 @@ describe("プロキシ：正常系と Mistral へのリクエスト", () => {
       json_schema: { name: "decree_intent", strict: true, schema: { additionalProperties: false } },
     });
     const schema = (req?.body.response_format as { json_schema: { schema: { properties: Record<string, { enum?: string[] }> } } }).json_schema.schema;
-    expect(schema.properties.target?.enum).toEqual(["residential", "road", "well", "office", "market", "tax", "welfare", "security"]);
+    expect(schema.properties.target?.enum).toEqual([...TARGETS]);
+    expect(schema.properties.target?.enum).toHaveLength(20);
   });
 
   it("勅令本文はユーザーメッセージだけに入り、システムプロンプトには入らない", async () => {

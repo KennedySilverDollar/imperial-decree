@@ -2,7 +2,7 @@ import { useState, type ReactNode } from "react";
 import type { DecreeIntent } from "../../domain/DecreeIntent";
 import type { TurnRecord } from "../../domain/TurnRecord";
 import { PARAM_KEYS } from "../../domain/Vocabulary";
-import { buildThreeTierView, renderExecutionNote, renderThreeTier } from "../../engine/ResultView";
+import { buildThreeTierView, renderEventNote, renderExecutionNote, renderThreeTier } from "../../engine/ResultView";
 import { aideName, messages } from "../../i18n/messages";
 
 // 3段表示＋意図比較（SPEC §6.5, §12.6）：書類が重なり、めくると下層が見える。差分は朱色の訂正線。
@@ -72,17 +72,13 @@ const buildSheets = (record: TurnRecord): readonly Sheet[] => {
           </>
         )}
         {view.correction.execution.notes.map((note, i) =>
-          note.kind === "budgetScaled" ? (
+          note.kind === "ordered" && note.limitedBy !== null ? (
             <div key={i}>
-              <Correction
-                label={r.fieldMagnitude}
-                from={original ? round(adjustment?.adjustedIntent.magnitude ?? original.magnitude) : percent(1)}
-                to={original ? round((adjustment?.adjustedIntent.magnitude ?? original.magnitude) * note.ratio) : percent(note.ratio)}
-              />
+              <Correction label={r.fieldCount} from={String(note.requested)} to={String(note.count)} />
               <p className="panel-note">{renderExecutionNote(note)}</p>
             </div>
           ) : (
-            <p key={i} className={note.kind === "applied" ? "" : "note-strong"}>
+            <p key={i} className={note.kind === "ordered" || note.kind === "policyChanged" ? "" : "note-strong"}>
               {renderExecutionNote(note)}
             </p>
           ),
@@ -101,14 +97,9 @@ const buildSheets = (record: TurnRecord): readonly Sheet[] => {
     ),
   });
 
-  const before = view.result.facilitiesBefore;
-  const after = view.result.facilitiesAfter;
-  const facilityLines = [
-    ...(after.officeBuilt && !before.officeBuilt ? [r.facilities.office] : []),
-    ...(after.marketCount > before.marketCount ? [r.facilities.market(after.marketCount - before.marketCount)] : []),
-    ...(Math.floor(after.housingUnits) > Math.floor(before.housingUnits)
-      ? [r.facilities.housing(Math.floor(after.housingUnits) - Math.floor(before.housingUnits))]
-      : []),
+  const happenings = [
+    ...view.result.completions.map((c) => messages.reports.completed(messages.targets[c.building], c.count, c.repair)),
+    ...view.result.events.map(renderEventNote),
   ];
   sheets.push({
     key: "result",
@@ -128,10 +119,10 @@ const buildSheets = (record: TurnRecord): readonly Sheet[] => {
             })}
           </tbody>
         </table>
-        {facilityLines.map((line) => (
-          <p key={line}>{line}</p>
+        {happenings.map((line, i) => (
+          <p key={i}>{line}</p>
         ))}
-        {text.result.length === 0 && facilityLines.length === 0 && <p>{r.noChange}</p>}
+        {text.result.length === 0 && <p>{r.noChange}</p>}
       </>
     ),
   });

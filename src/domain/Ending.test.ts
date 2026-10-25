@@ -1,9 +1,11 @@
 import { describe, expect, it } from "vitest";
 import { MAX_TURNS } from "./constants";
 import { determineEnding } from "./Ending";
-import { INITIAL_FACILITIES, INITIAL_PARAMS, type Params } from "./GameState";
+import { INITIAL_PARAMS, type Params } from "./GameState";
 
-const built = { ...INITIAL_FACILITIES, officeBuilt: true };
+const INITIAL_FACILITIES = false;
+
+const built = true;
 const successParams: Params = { ...INITIAL_PARAMS, population: 300, infrastructure: 25 };
 
 describe("エンディング判定（SPEC §7.2 / D-05, D-16, D-17）", () => {

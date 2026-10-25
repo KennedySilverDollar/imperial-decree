@@ -23,3 +23,18 @@ export const deriveSeed = (seed: number, salt: number): PrngState => {
   const [value] = nextFloat(normalizeSeed(seed ^ Math.imul(salt + 1, MULBERRY_INCREMENT)));
   return normalizeSeed(Math.floor(value * UINT32));
 };
+
+/** 文字列のハッシュ（FNV-1a 32bit）。新聞の seed = hash(saveId, turn) などに使う */
+export const hashString = (text: string): PrngState => {
+  const FNV_OFFSET = 0x811c9dc5;
+  const FNV_PRIME = 0x01000193;
+  let hash = FNV_OFFSET;
+  for (let i = 0; i < text.length; i++) {
+    hash ^= text.charCodeAt(i);
+    hash = Math.imul(hash, FNV_PRIME);
+  }
+  return hash >>> 0;
+};
+
+/** 派生 seed から [0,1) を1つ取り出す（配置など、本系列を消費しない用途） */
+export const unitFromSeed = (seed: number, salt: number): number => nextFloat(deriveSeed(seed, salt))[0];

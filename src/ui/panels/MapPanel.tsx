@@ -1,12 +1,13 @@
 import Phaser from "phaser";
 import { useEffect, useRef } from "react";
+import { CATEGORIES } from "../../domain/Buildings";
 import { GRID_SIZE } from "../../domain/constants";
-import type { MapState, TileKind } from "../../domain/Map";
+import type { MapState } from "../../domain/Map";
 import { messages } from "../../i18n/messages";
 import { MAP_PIXELS, MapScene } from "../scenes/MapScene";
 import { palette } from "../theme";
 
-const LEGEND: readonly TileKind[] = ["office", "road", "residential", "market", "empty"];
+const PLAIN_LEGEND = ["road", "construction", "empty", "cracked"] as const;
 
 export function MapPanel({ map }: { readonly map: MapState }) {
   const host = useRef<HTMLDivElement>(null);
@@ -44,16 +45,18 @@ export function MapPanel({ map }: { readonly map: MapState }) {
       <h2 className="panel-title">{messages.ui.panels.map}</h2>
       <div className="map-canvas" ref={host} data-testid="map-canvas" />
       <ul className="map-legend">
-        {LEGEND.map((kind) => (
-          <li key={kind}>
-            <span className={`legend-swatch legend-${kind}`} aria-hidden />
-            {legend[kind]} {kind === "empty" ? "" : map.counts[kind]}
+        {CATEGORIES.map((category) => (
+          <li key={category}>
+            <span className={`legend-swatch legend-${category}`} aria-hidden />
+            {messages.categories[category]}
           </li>
         ))}
-        <li>
-          <span className="legend-swatch legend-cracked" aria-hidden />
-          {legend.cracked}
-        </li>
+        {PLAIN_LEGEND.map((kind) => (
+          <li key={kind}>
+            <span className={`legend-swatch legend-${kind}`} aria-hidden />
+            {legend[kind]}
+          </li>
+        ))}
       </ul>
       <p className="panel-note">{messages.ui.map.note}</p>
     </section>

@@ -1,4 +1,11 @@
-import { LOW_CONFIDENCE_THRESHOLD, MAGNITUDE_MAX, MAGNITUDE_MIN, SCALE_TAG_MAGNITUDE } from "../domain/constants";
+import {
+  LOW_CONFIDENCE_THRESHOLD,
+  MAGNITUDE_MAX,
+  MAGNITUDE_MIN,
+  MAGNITUDE_PER_BUILDING,
+  MAX_BUILD_PER_DECREE,
+  SCALE_TAG_MAGNITUDE,
+} from "../domain/constants";
 import { ACTIONS, TARGETS } from "../domain/Vocabulary";
 
 // システムプロンプト（A-09 / CLAUDE.md §4-10）：翻訳タスクの定義と語彙だけを書く。
@@ -14,10 +21,15 @@ export const SYSTEM_PROMPT = [
   "Translate the decree into exactly one JSON object with these fields and nothing else:",
   `- action: one of ${ACTIONS.join(", ")}`,
   `- target: one of ${TARGETS.join(", ")}`,
-  "  (residential=housing, road=roads, well=wells/water, office=government office, market=market,",
-  "   tax=taxes, welfare=welfare/festivals/relief, security=public order/anti-corruption)",
+  "  Buildings: residential=houses, tenement=row houses, manor=mansion, road=roads, well=wells/water,",
+  "   granary=granary/storehouse, market=market, farm=fields/farms, workshop=workshop/craftsmen,",
+  "   office=government office, taxoffice=tax collection office, courthouse=court/magistrate,",
+  "   clinic=clinic/physician, school=school/academy, temple=temple/shrine, watchtower=watchtower/guards,",
+  "   jail=jail/prison.",
+  "  Policies: tax_rate=taxes, welfare_policy=welfare/festivals/relief, security_policy=public order/patrols.",
   `- magnitude: number from ${MAGNITUDE_MIN} to ${MAGNITUDE_MAX}. Size of the action. Negative means reduce (e.g. tax cut).`,
   `  Small ≈ ${SCALE_TAG_MAGNITUDE.small}, medium ≈ ${SCALE_TAG_MAGNITUDE.medium}, large ≈ ${SCALE_TAG_MAGNITUDE.large}. If the decree gives a number, use it.`,
+  `  For buildings, a count of n buildings means magnitude ${MAGNITUDE_PER_BUILDING}×n (at most ${MAX_BUILD_PER_DECREE} buildings).`,
   "- budget: number >= 0. Money explicitly offered by the decree, otherwise 0.",
   "- confidence: number from 0 to 1. How sure you are about the translation.",
   "",

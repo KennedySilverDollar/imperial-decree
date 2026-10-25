@@ -198,7 +198,7 @@ export function App() {
 
       <main className="desk-grid">
         <div className="desk-column">
-          <NewspaperPanel article={lastRecord?.newspaper ?? null} />
+          <NewspaperPanel newspaper={lastRecord?.newspaper ?? null} />
           <AidePanel
             aides={game.aides}
             reports={lastRecord?.aideReports ?? []}

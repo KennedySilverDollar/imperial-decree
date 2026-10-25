@@ -1,16 +1,83 @@
-import { GRID_SIZE, INFRA_PER_ROAD_TILE, MIN_EMPTY_TILES } from "./constants";
-import type { Facilities, Params } from "./GameState";
+import { BUILDINGS, CATEGORY_PLACEMENT_ORDER, type BuildingId, type Category } from "./Buildings";
+import type { Project } from "./Construction";
+import { GRID_SIZE, INFRA_PER_ROAD_TILE, ROAD_TILE_MAX } from "./constants";
+import type { BuildingInstance } from "./DerivedStats";
+import { hashString, unitFromSeed } from "./Prng";
 
-// 地図の自動導出（SPEC §8.2 / BALANCE §6 / DECISIONS N-01, D-25, D-26）。
-// 地図は状態として保存せず、パラメータから毎回導出する。
+// 地図（v3.2 §2.6 / DECISIONS X-03, W-09, Z-13）。
+// 区画は発注時に決めて保存する（毎年再計算すると道路の増減で全体がずれるため）。
+// 道路は中央の十字に、floor(インフラ/5) 本だけ描く（区画を占めない）。役所は中央の決まった区画。
+// 同じカテゴリ内の位置はセーブ ID と通し番号から決まる乱数（本系列の Rng を消費しない）。
 
-export type TileKind = "office" | "road" | "residential" | "market" | "empty";
+export type Coord = readonly [number, number];
+
+const CENTER = (GRID_SIZE - 1) / 2;
+const ROAD_LINE = Math.floor(CENTER);
+const key = ([x, y]: Coord) => `${x},${y}`;
+const distance = ([x, y]: Coord) => Math.hypot(x - CENTER, y - CENTER);
+const byDistance = (a: Coord, b: Coord) => distance(a) - distance(b) || a[1] - b[1] || a[0] - b[0];
+
+/** 道路の十字（中央から外へ伸びる順） */
+export const ROAD_TILES: readonly Coord[] = (() => {
+  const tiles: Coord[] = [];
+  for (let i = 0; i < GRID_SIZE; i++) tiles.push([i, ROAD_LINE]);
+  for (let i = 0; i < GRID_SIZE; i++) if (i !== ROAD_LINE) tiles.push([ROAD_LINE, i]);
+  const roadCenter: Coord = [ROAD_LINE, ROAD_LINE];
+  const d = ([x, y]: Coord) => Math.abs(x - roadCenter[0]) + Math.abs(y - roadCenter[1]);
+  return tiles.sort((a, b) => d(a) - d(b) || a[1] - b[1] || a[0] - b[0]).slice(0, ROAD_TILE_MAX);
+})();
+
+const ROAD_KEYS = new Set(ROAD_TILES.map(key));
+export const OFFICE_TILE: Coord = [ROAD_LINE + 1, ROAD_LINE + 1];
+
+/** 建物を置ける区画（道路と役所の区画を除き、中央に近い順） */
+export const BUILDING_TILES: readonly Coord[] = (() => {
+  const tiles: Coord[] = [];
+  for (let y = 0; y < GRID_SIZE; y++) for (let x = 0; x < GRID_SIZE; x++) if (!ROAD_KEYS.has(key([x, y]))) tiles.push([x, y]);
+  return tiles.filter((t) => key(t) !== key(OFFICE_TILE)).sort(byDistance);
+})();
+
+const MIN_WINDOW = 6;
+const WINDOW_FRACTION = 3;
+
+/**
+ * 区画を選ぶ。カテゴリの優先順位（v3.2 §2.6）が高いほど中央寄りの帯から、帯の中は u（[0,1)）で選ぶ。
+ * 役所は中央の決まった区画。空きがなければ null。
+ */
+export const chooseTile = (occupied: ReadonlySet<string>, building: BuildingId, u: number): Coord | null => {
+  if (building === "office") return occupied.has(key(OFFICE_TILE)) ? null : OFFICE_TILE;
+  const free = BUILDING_TILES.filter((t) => !occupied.has(key(t)));
+  if (free.length === 0) return null;
+  const rank = CATEGORY_PLACEMENT_ORDER.indexOf(BUILDINGS[building].category);
+  const window = Math.min(free.length, Math.max(MIN_WINDOW, Math.ceil(free.length / WINDOW_FRACTION)));
+  const start = Math.min(free.length - window, Math.floor((free.length * rank) / CATEGORY_PLACEMENT_ORDER.length));
+  return free[start + Math.floor(u * window)] ?? free[0] ?? null;
+};
+
+/** 置き場所を選ぶための乱数（セーブ ID と通し番号から決まる） */
+export const placementUnit = (saveId: string, serial: number): number => unitFromSeed(hashString(saveId), serial);
+
+export const occupiedTiles = (buildings: readonly BuildingInstance[], projects: readonly Project[]): Set<string> => {
+  const set = new Set<string>();
+  for (const b of buildings) if (b.tile) set.add(key(b.tile));
+  for (const p of projects) for (const t of p.tiles) set.add(key(t));
+  return set;
+};
+
+export const freeBuildingTiles = (buildings: readonly BuildingInstance[], projects: readonly Project[]): number => {
+  const occupied = occupiedTiles(buildings, projects);
+  return BUILDING_TILES.filter((t) => !occupied.has(key(t))).length + (occupied.has(key(OFFICE_TILE)) ? 0 : 1);
+};
+
+export type TileKind = "empty" | "road" | "building" | "construction";
 
 export interface Tile {
   readonly x: number;
   readonly y: number;
   readonly kind: TileKind;
-  /** 見た目と実態の乖離が開示された区画（亀裂アイコン） */
+  readonly building: BuildingId | null;
+  readonly category: Category | null;
+  /** 空洞が側近報告で開示された区画（亀裂アイコン） */
   readonly cracked: boolean;
 }
 
@@ -18,67 +85,41 @@ export interface MapState {
   readonly size: number;
   /** tiles[y][x] */
   readonly tiles: readonly (readonly Tile[])[];
-  readonly counts: Readonly<Record<TileKind, number>>;
+  readonly roads: number;
+  readonly constructionTiles: number;
 }
 
-/** 中心から時計回りの螺旋順に全区画を並べる */
-export const spiralOrder = (size: number): readonly (readonly [number, number])[] => {
-  const result: (readonly [number, number])[] = [];
-  const directions = [
-    [1, 0],
-    [0, 1],
-    [-1, 0],
-    [0, -1],
-  ] as const;
-  let x = Math.floor((size - 1) / 2);
-  let y = x;
-  let step = 1;
-  let dir = 0;
-  const inBounds = (px: number, py: number) => px >= 0 && py >= 0 && px < size && py < size;
-  result.push([x, y]);
-  while (result.length < size * size) {
-    for (let leg = 0; leg < 2; leg++) {
-      const [dx, dy] = directions[dir % directions.length] ?? [0, 0];
-      for (let i = 0; i < step; i++) {
-        x += dx;
-        y += dy;
-        if (inBounds(x, y)) result.push([x, y]);
-      }
-      dir++;
-    }
-    step++;
-  }
-  return result;
-};
+export const roadTileCount = (infrastructure: number): number =>
+  Math.min(ROAD_TILE_MAX, Math.max(0, Math.floor(infrastructure / INFRA_PER_ROAD_TILE)));
 
-const SPIRAL = spiralOrder(GRID_SIZE);
-
-export const deriveMap = (params: Params, facilities: Facilities): MapState => {
-  const capacity = GRID_SIZE * GRID_SIZE - MIN_EMPTY_TILES;
-  const actualRoads = Math.floor(params.infrastructure / INFRA_PER_ROAD_TILE);
-  const visualRoads = Math.floor((params.infrastructure + facilities.hollowInfrastructure) / INFRA_PER_ROAD_TILE);
-  const crackedRoads = facilities.hollowDisclosed ? Math.max(0, visualRoads - actualRoads) : 0;
-
-  // 優先順位：役所 → 道路 → 住宅 → 市場 → 空き地
-  const queue: { kind: TileKind; cracked: boolean }[] = [];
-  const push = (kind: TileKind, count: number, cracked = false) => {
-    for (let i = 0; i < count && queue.length < capacity; i++) queue.push({ kind, cracked });
-  };
-  push("office", facilities.officeBuilt ? 1 : 0);
-  push("road", visualRoads - crackedRoads);
-  push("road", crackedRoads, true);
-  push("residential", Math.floor(facilities.housingUnits));
-  push("market", facilities.marketCount);
-
+export const deriveMap = (
+  infrastructure: number,
+  buildings: readonly BuildingInstance[],
+  projects: readonly Project[],
+): MapState => {
   const grid: Tile[][] = Array.from({ length: GRID_SIZE }, (_, y) =>
-    Array.from({ length: GRID_SIZE }, (_, x) => ({ x, y, kind: "empty" as TileKind, cracked: false })),
+    Array.from({ length: GRID_SIZE }, (_, x) => ({ x, y, kind: "empty" as TileKind, building: null, category: null, cracked: false })),
   );
-  const counts: Record<TileKind, number> = { office: 0, road: 0, residential: 0, market: 0, empty: 0 };
-  SPIRAL.forEach(([x, y], index) => {
-    const placed = queue[index] ?? { kind: "empty" as TileKind, cracked: false };
-    const row = grid[y];
-    if (row) row[x] = { x, y, kind: placed.kind, cracked: placed.cracked };
-    counts[placed.kind]++;
-  });
-  return { size: GRID_SIZE, tiles: grid, counts };
+  const set = (t: Tile) => {
+    const row = grid[t.y];
+    if (row) row[t.x] = t;
+  };
+  const roads = roadTileCount(infrastructure);
+  ROAD_TILES.slice(0, roads).forEach(([x, y]) => set({ x, y, kind: "road", building: null, category: null, cracked: false }));
+  for (const b of buildings) {
+    if (!b.tile) continue;
+    const [x, y] = b.tile;
+    set({ x, y, kind: "building", building: b.kind, category: BUILDINGS[b.kind].category, cracked: b.hollow && b.disclosed });
+  }
+  let constructionTiles = 0;
+  for (const p of projects) {
+    if (p.repair) continue;
+    for (const [x, y] of p.tiles) {
+      set({ x, y, kind: "construction", building: p.kind, category: BUILDINGS[p.kind].category, cracked: false });
+      constructionTiles++;
+    }
+  }
+  return { size: GRID_SIZE, tiles: grid, roads, constructionTiles };
 };
+
+export const tileKey = key;

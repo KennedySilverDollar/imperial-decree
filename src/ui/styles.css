@@ -217,6 +217,21 @@ body {
   line-height: 1.35;
 }
 
+.newspaper-subhead {
+  margin: 8px 0 4px;
+  font-size: 17px;
+  font-weight: 700;
+  line-height: 1.4;
+}
+
+.newspaper-section {
+  margin-top: 10px;
+  font-family: var(--sans);
+  font-size: 11px;
+  letter-spacing: 0.1em;
+  opacity: 0.7;
+}
+
 .newspaper-body {
   font-weight: 300;
   column-count: 2;
@@ -269,20 +284,32 @@ body {
   border: 1px solid rgb(232 220 192 / 50%);
 }
 
-.legend-office {
-  background: var(--vermilion);
-}
 .legend-road {
   background: #9c8460;
 }
-.legend-residential {
-  background: var(--paper);
-}
-.legend-market {
-  background: repeating-linear-gradient(90deg, var(--ink) 0 2px, var(--paper) 2px 5px);
+.legend-construction {
+  background: repeating-linear-gradient(45deg, var(--ink) 0 2px, var(--paper) 2px 6px);
 }
 .legend-empty {
   background: var(--land);
+}
+.legend-housing {
+  background: #d9c9a3;
+}
+.legend-infrastructure {
+  background: #b8b39a;
+}
+.legend-economy {
+  background: #c9ad7a;
+}
+.legend-administration {
+  background: var(--vermilion);
+}
+.legend-social {
+  background: #a9b39a;
+}
+.legend-security {
+  background: #8f8a80;
 }
 .legend-cracked {
   background: linear-gradient(135deg, transparent 45%, var(--warning) 45% 58%, transparent 58%), var(--paper);
