@@ -16,6 +16,32 @@ const signed = (value: number): string => (value > 0 ? `+${fmt(value)}` : fmt(va
 const percent = (ratio: number): string => `${Math.round(ratio * 100)}%`;
 const signedLevel = (level: number): string => (level > 0 ? `+${level}` : String(level));
 
+const TARGET_NAMES = {
+  residential: "住宅",
+  tenement: "長屋",
+  manor: "屋敷",
+  road: "道路",
+  well: "井戸",
+  granary: "倉庫",
+  market: "市場",
+  farm: "農地",
+  workshop: "工房",
+  office: "役所",
+  taxoffice: "徴税所",
+  courthouse: "裁判所",
+  clinic: "診療所",
+  school: "学校",
+  temple: "寺院",
+  watchtower: "見張り塔",
+  jail: "牢屋",
+  tax_rate: "税率",
+  welfare_policy: "福祉政策",
+  security_policy: "治安政策",
+} as const satisfies Record<Target, string>;
+
+/** 数え方：道路は「本」、ほかの建物は「棟」 */
+const unitOf = (building: string): string => (building === TARGET_NAMES.road ? "本" : "棟");
+
 export const messages = {
   params: {
     population: "人口",
@@ -26,28 +52,7 @@ export const messages = {
   } satisfies Record<ParamKey, string>,
 
   /** 20 の target の名称（id は domain/Buildings.ts が単一情報源。網羅は型で保証） */
-  targets: {
-    residential: "住宅",
-    tenement: "長屋",
-    manor: "屋敷",
-    road: "道路",
-    well: "井戸",
-    granary: "倉庫",
-    market: "市場",
-    farm: "農地",
-    workshop: "工房",
-    office: "役所",
-    taxoffice: "徴税所",
-    courthouse: "裁判所",
-    clinic: "診療所",
-    school: "学校",
-    temple: "寺院",
-    watchtower: "見張り塔",
-    jail: "牢屋",
-    tax_rate: "税率",
-    welfare_policy: "福祉政策",
-    security_policy: "治安政策",
-  } satisfies Record<Target, string>,
+  targets: TARGET_NAMES,
 
   /** 地図のタイルの1文字アイコン（v3.2 §2.3 のタイル列） */
   tileGlyphs: {
@@ -159,9 +164,9 @@ export const messages = {
       nonPositive: "減らせとの仰せでしたが、取り壊しは致しかねます",
     } satisfies Record<NoopReason, string>,
     ordered: (building: string, count: number, repair: boolean) =>
-      repair ? `${building}${count}棟の修繕を発注した` : `${building}${count}棟の普請を発注した`,
+      repair ? `${building}${count}${unitOf(building)}の修繕を発注した` : `${building}${count}${unitOf(building)}の普請を発注した`,
     limited: (requested: number, count: number, limit: OrderLimit) =>
-      `${messages.orderLimits[limit]}のため ${requested}棟 → ${count}棟`,
+      `${messages.orderLimits[limit]}のため ${requested} → ${count}`,
     orderFailed: (building: string, reason: OrderFailure, detail: string | null) =>
       `${building}は発注できなかった（${messages.orderFailures[reason](detail)}）`,
   },
@@ -187,13 +192,13 @@ export const messages = {
     item: (param: string, delta: number) => `${param}は${signed(delta)}でございます`,
     nothingToReport: "特に申し上げることはございません",
     metaIgnored: "不遜な文言は聞かなかったことにいたします",
-    hollowDisclosed: (building: string, count: number) => `${building}のうち${count}棟は、見かけ倒しで中身がございません`,
+    hollowDisclosed: (building: string, count: number) => `${building}のうち${count}${unitOf(building)}は、見かけ倒しで中身がございません`,
     constructionEstimate: (building: string, count: number, turns: number | null) =>
       turns === null
-        ? `${building}${count}棟の普請は、いつ終わるとも知れません`
-        : `${building}${count}棟の普請は、あと${turns}年ほどかと存じます`,
+        ? `${building}${count}${unitOf(building)}の普請は、いつ終わるとも知れません`
+        : `${building}${count}${unitOf(building)}の普請は、あと${turns}年ほどかと存じます`,
     completed: (building: string, count: number, repair: boolean) =>
-      repair ? `${building}${count}棟の修繕が終わりました` : `${building}${count}棟が完成いたしました`,
+      repair ? `${building}${count}${unitOf(building)}の修繕が終わりました` : `${building}${count}${unitOf(building)}が完成いたしました`,
     materialShortage: (severe: boolean) =>
       severe ? "資材がひどく足りず、手持ちで間に合わせております" : "資材が足りず、普請が滞っております",
     overload: "人手に対して普請が多すぎ、現場が回っておりません",

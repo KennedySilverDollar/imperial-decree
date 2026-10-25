@@ -38,20 +38,23 @@ export const BUILDING_TILES: readonly Coord[] = (() => {
   return tiles.filter((t) => key(t) !== key(OFFICE_TILE)).sort(byDistance);
 })();
 
-const MIN_WINDOW = 6;
-const WINDOW_FRACTION = 3;
+/** 1つのカテゴリが選ぶ候補の数（中央に近い空き区画から数えて） */
+const PLACEMENT_WINDOW = 6;
+/** カテゴリの優先順位が1つ下がるごとに、候補の帯を外へずらす区画数 */
+const RANK_STRIDE = 3;
 
 /**
- * 区画を選ぶ。カテゴリの優先順位（v3.2 §2.6）が高いほど中央寄りの帯から、帯の中は u（[0,1)）で選ぶ。
- * 役所は中央の決まった区画。空きがなければ null。
+ * 区画を選ぶ（v3.2 §2.6 / CLAUDE.md §5「役所→道路→住宅→空き地」）。
+ * 空き区画を中央に近い順に並べ、カテゴリの優先順位が高いほど内側の帯から、帯の中は u（[0,1)）で選ぶ。
+ * 内側が埋まれば帯は自然に外へ移るので、町は中央から外へ育つ。役所は中央の決まった区画。空きがなければ null。
  */
 export const chooseTile = (occupied: ReadonlySet<string>, building: BuildingId, u: number): Coord | null => {
   if (building === "office") return occupied.has(key(OFFICE_TILE)) ? null : OFFICE_TILE;
   const free = BUILDING_TILES.filter((t) => !occupied.has(key(t)));
   if (free.length === 0) return null;
   const rank = CATEGORY_PLACEMENT_ORDER.indexOf(BUILDINGS[building].category);
-  const window = Math.min(free.length, Math.max(MIN_WINDOW, Math.ceil(free.length / WINDOW_FRACTION)));
-  const start = Math.min(free.length - window, Math.floor((free.length * rank) / CATEGORY_PLACEMENT_ORDER.length));
+  const start = Math.min(free.length - 1, rank * RANK_STRIDE);
+  const window = Math.min(free.length - start, PLACEMENT_WINDOW);
   return free[start + Math.floor(u * window)] ?? free[0] ?? null;
 };
 

@@ -6,6 +6,7 @@ import type { GameState } from "../domain/GameState";
 import type { IntentDeclaration } from "../domain/IntentDeclaration";
 import type { TurnRecord } from "../domain/TurnRecord";
 import { mapOf } from "../engine/MapUpdater";
+import { targetUsageOf } from "../engine/Telemetry";
 import { messages } from "../i18n/messages";
 import { AidePanel } from "./panels/AidePanel";
 import { DecreePanel } from "./panels/DecreePanel";
@@ -102,6 +103,11 @@ export function App() {
         bonusHappiness: record?.bonusHappiness ?? 0,
       },
     });
+    if (record) {
+      for (const usage of targetUsageOf(record)) {
+        gameApi.log({ event: "target.used", data: { gameId: gameId.current, turn: game.turn, ...usage } });
+      }
+    }
     if (next.ending !== null) {
       gameApi.log({ event: "game.end", data: { gameId: gameId.current, turns: game.turn, ending: next.ending } });
     }
@@ -193,15 +199,12 @@ export function App() {
 
       <main className="desk-grid">
         <div className="desk-column">
-          <NewspaperPanel newspaper={lastRecord?.newspaper ?? null} />
-          <AidePanel
-            aides={game.aides}
-            reports={lastRecord?.aideReports ?? []}
-            candidates={candidates}
-            politicalCapital={game.politicalCapital}
-            disabled={busy}
-            onAppoint={(id) => void appoint(id)}
-            onDismiss={(id) => void dismiss(id)}
+          <NewspaperPanel
+            newspaper={lastRecord?.newspaper ?? null}
+            onRead={(reading) => gameApi.log({ event: "newspaper.read", data: { gameId: gameId.current, ...reading } })}
+            onLettersRead={(issueTurn, articleIds, dwellMs) =>
+              gameApi.log({ event: "newspaper.letters", data: { gameId: gameId.current, issueTurn, articleIds, dwellMs } })
+            }
           />
         </div>
         <div className="desk-column">
@@ -218,6 +221,17 @@ export function App() {
             onSubmit={(decree, intent) => void submit(decree, intent)}
           />
           {error !== null && <p className="warning-text">{error}</p>}
+        </div>
+        <div className="desk-column">
+          <AidePanel
+            aides={game.aides}
+            reports={lastRecord?.aideReports ?? []}
+            candidates={candidates}
+            politicalCapital={game.politicalCapital}
+            disabled={busy}
+            onAppoint={(id) => void appoint(id)}
+            onDismiss={(id) => void dismiss(id)}
+          />
         </div>
       </main>
 
