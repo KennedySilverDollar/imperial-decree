@@ -2,13 +2,13 @@
 # シークレット（MISTRAL_API_KEY, PROXY_TOKEN）はここに書かない。
 #   ローカル: .dev.vars（.dev.vars.example をコピー。git 管理外）
 #   本番:     npx wrangler secret put MISTRAL_API_KEY / PROXY_TOKEN
-name = "imperial-decree-proxy"
+name = "imperial-decree"
 main = "src/proxy/worker.ts"
 compatibility_date = "2026-10-01"
 
 [vars]
 ENVIRONMENT = "production"
-ALLOWED_ORIGINS = ""
+ALLOWED_ORIGINS = "https://imperial-decree-game.pages.dev"
 MISTRAL_MODEL = "mistral-small-latest"
 RATE_LIMIT_PER_MINUTE = "20"
 SCHEMA_INCLUDE_RANGES = "false"
