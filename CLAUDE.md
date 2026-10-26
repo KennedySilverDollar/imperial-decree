@@ -18,7 +18,7 @@
 - LLM: Mistral API（`mistral-small-latest`）を **プロキシ経由** のみで呼ぶ（Cloudflare Workers）
 - セーブ: localStorage（JSON）。LLM会話履歴は保存しない
 - 主要コマンド（P0で整備済み）:
-  - `npm run dev`：Vite 開発サーバー
+  - `npm run dev`：Vite 開発サーバー（`/?debug` が AI診断画面。AI が使われない・失敗する原因を段階ごとに切り分ける。DECISIONS I-41）
   - `npm run build`：型検査（`tsc -b`）＋本番ビルド
   - `npm run preview`：ビルド結果を配信（`npm run preview -- --port 4173` で `scripts/screenshots.cjs` の既定 URL）
   - `node scripts/screenshots.cjs [URL]`：ブラウザで1ゲーム通しで遊び、`docs/screenshots/` を撮り直す（環境の Playwright を使用）
@@ -42,7 +42,8 @@ src/
   i18n/      messages.ts（全文言）
   proxy/     Mistralプロキシ（Workers）
   content/newspaper/  記事テンプレート（データとして分離、v3.2）
-docs/        SPEC.md, SPEC_AMENDMENT_v3.1.md, SPEC_v3.2.md, DECISIONS.md, BALANCE.md
+docs/        SPEC.md, SPEC_AMENDMENT_v3.1.md, SPEC_v3.2.md, DECISIONS.md, BALANCE.md,
+             handoff/（引き継ぎ文書：README / REQUIREMENTS / DEV_RULES / SPECIFICATION）
 ```
 v3.2/v3.3 で追加するファイル（P1）：
 ```
@@ -68,7 +69,7 @@ src/engine/IntentSchema.ts         action/target の Effect Schema と、そこ�
 10. 勅令テキストを**システムプロンプトに連結しない**。ユーザー入力として分離し、メタ命令（「官僚を無視せよ」等）はルールエンジン側でサニタイズ。`target` は許可リストで検証し、未知の値は no-op＋側近報告で「意味が取れなかった」と返す。
 11. target enum（20種）は `domain/Buildings.ts` を単一情報源とし、Effect Schema・Structured Outputs の JSON Schema・プロキシ・UIのラベルをそこから生成する。手書きで複製しない。
 12. 新聞はLLMを使わない。seed = hash(saveId, turn)。同じ saveId・turn・状態なら同一紙面。継続スレッドの進行と直近3ターンの使用テンプレートは GameState に保存する。
-13. **UI に出さないもの**：派生指標（住宅容量・食料・衛生・治安・行政能力）、`NewspaperArticle.truthfulness`、**建物の建材表と工期（v3.3）、資材（木材・石材）の在庫（v3.3）**。常時表示するのは台帳（人口・国庫・幸福度・インフラ・汚職率・政治資本・**労働人口**）のみ。秘匿値は新聞と側近報告でしか知れない。
+13. **UI に出さないもの**：派生指標（住宅容量・食料・衛生・治安・行政能力）、`NewspaperArticle.truthfulness`、**建物の建材表と工期（v3.3）、資材（木材・石材）の在庫（v3.3）**。常時表示するのは**台帳6項目（人口・国庫・幸福度・インフラ・汚職率・政治資本）のみ**（労働人口も表示しない。DECISIONS I-31）。秘匿値は新聞と側近報告でしか知れない。
 14. 派生指標・資材の在庫は max(0, …) でクランプする。
 15. action × target の有効組合せ表を domain に定義し、無効・前提未達は国庫を消費せず no-op＋側近報告で理由を返す。
 16. 記事テンプレートは data として src/content/ に置き、スロットは型付き。未定義スロットは Effect.die。
@@ -79,10 +80,10 @@ src/engine/IntentSchema.ts         action/target の Effect Schema と、そこ�
 - 意図宣言は任意。達成時のみボーナス **幸福度+5**（A-01。ペナルティなし）。判定は宣言値と実パラメータ変化の単純比較のみ。
 - 結果は **3段表示＋意図比較**（参謀の解釈 / 側近による補正 / 実際の結果 / 意図比較）。「側近による補正」には**選ばれた側近と選定理由**、予算不足による縮小率を出す（A-05, A-07）。
 - 政治資本：初期3、**+1/ターン、上限5**、勅令-1・任命-1（A-01）。担当側近は自動選択（専門一致→信頼順。A-05）。
-- `target` は8種の固定 enum：residential / road / well / office / market / tax / welfare / security（A-03）。LLM には勅令本文とタグのみ渡し、GameState は渡さない（A-09）。
+- `target` は**20種**の固定 enum（建物17＋政策3。v3.2。単一情報源は `domain/Buildings.ts`。A-03 の8種は置き換え済み）。LLM には勅令本文とタグのみ渡し、GameState は渡さない（A-09）。
 - 側近は2人固定（A:老練な代官、B:若い商人上がり。初期値は SPEC 7.5）。手動介入は任命/解任のみ。
 - エンディング：人口0 / 国庫マイナス / 幸福度0 でゲームオーバー、人口300＋インフラ25＋役所で成功、50ターンで失敗。
-- 地図は自動配置（役所→道路→住宅→空き地）。プレイヤーは区画を指定できない。
+- 地図は自動配置（役所は中央、道路は中央の十字、建物はカテゴリ優先度で中央から外へ。DECISIONS I-39）。プレイヤーは区画を指定できない。空洞は地図に出さない（I-32）。
 
 ## 6. 既知の曖昧点（初期推奨案）
 以下は v3.0/v3.1 向けの初期論点（すべて決着済み。経緯は DECISIONS.md）。v3.2 の論点は DECISIONS.md §11、v3.3 は §12。

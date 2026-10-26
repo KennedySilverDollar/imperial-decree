@@ -18,7 +18,7 @@
 | 紙の質感（新聞・書簡・巻物・3段表示の書類） | CSS のグラデーションと影 | `src/ui/styles.css`（`.paper`） |
 | 机の木目 | CSS の繰り返しグラデーション | `src/ui/styles.css`（`.desk`） |
 | 判子・押印 | CSS（円形ボタン＋枠線の印影、transition） | `src/ui/styles.css`（`.seal-button`, `.seal-imprint`） |
-| 地図のタイル（住宅・道路・役所・市場・亀裂） | Phaser の Graphics で図形を描画 | `src/ui/scenes/MapScene.ts` |
+| 地図のタイル（建物17種のカテゴリ別の色＋1文字の記号、道路、普請中、空き地） | Phaser の Graphics で図形と文字を描画（画像なし） | `src/ui/scenes/MapScene.ts`、色は `src/ui/theme.ts` |
 
 ## 未使用（P0 では入れない）
 - 効果音（判子・紙めくり）：SPEC §12.8 でプロトは不要。入れる場合は CC0（freesound 等）か自作とし、ここに出典を書く。
