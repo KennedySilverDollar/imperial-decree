@@ -50,7 +50,15 @@ export const makeLLMServiceProxy = (config: ProxyConfig): LLMServiceShape => {
                 try: () => response.json() as Promise<unknown>,
                 catch: (error) => new LLMError({ reason: "invalidJson", detail: String(error) }),
               })
-            : Effect.fail(new LLMError({ reason: reasonFor(response.status), detail: `proxy ${response.status}` })),
+            : Effect.flatMap(
+                // プロキシの { error: "upstream_401" } などを detail に残す（診断画面とログで原因を追えるように）
+                Effect.promise(() => response.json().catch(() => null) as Promise<unknown>),
+                (body) => {
+                  const code = (body as { error?: unknown } | null)?.error;
+                  const suffix = typeof code === "string" ? `: ${code}` : "";
+                  return Effect.fail(new LLMError({ reason: reasonFor(response.status), detail: `proxy ${response.status}${suffix}` }));
+                },
+              ),
         ),
         Effect.flatMap((body) => {
           const output = (body as { output?: unknown } | null)?.output;

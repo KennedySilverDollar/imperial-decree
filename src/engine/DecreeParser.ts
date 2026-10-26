@@ -156,7 +156,7 @@ export const parseDecree = (decree: Decree): Effect.Effect<Interpretation, never
         onTimeout: () => new LLMError({ reason: "timeout" }),
       }),
       Effect.flatMap((output) => Either.match(decodeLLMOutput(output), { onLeft: Effect.fail, onRight: Effect.succeed })),
-      Effect.tapError((error) => logger.log({ event: "llm.attemptFailed", data: { reason: error.reason } })),
+      Effect.tapError((error) => logger.log({ event: "llm.attemptFailed", data: { reason: error.reason, detail: error.detail ?? null } })),
     );
 
     const result = yield* Effect.either(Effect.retry(attempt, { schedule: retrySchedule, while: isRetryable }));
@@ -170,7 +170,7 @@ export const parseDecree = (decree: Decree): Effect.Effect<Interpretation, never
       } satisfies Interpretation;
     }
     const reason: LLMFailureReason = result.left.reason;
-    yield* logger.log({ event: "llm.fallback", data: { reason } });
+    yield* logger.log({ event: "llm.fallback", data: { reason, detail: result.left.detail ?? null } });
     return {
       intent: templateParse(decree, sanitized.text),
       source: "template",
