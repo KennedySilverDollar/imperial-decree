@@ -498,3 +498,63 @@ P1 の指示（「Phase 0 の承認済み内容に従って実装」）を受け
 | I-39 | 机の配置と区画の割り振り | 三角測量の材料（新聞・地図・側近報告）を一度に見られるよう、机を3列（新聞／地図と勅令／側近）にした（幅1280px 未満は2列、1100px 未満は1列）。区画は「空き区画を中央に近い順に並べ、カテゴリの優先順位ごとに3区画ずつ外へずらした6区画の帯から選ぶ」形に変え、町が中央から外へ育つようにした（P1 の帯は広すぎて端に散らばった） | 記録のみ |
 | I-40 | スクリーンショットの三角測量の場面 | 自然な1ゲームでは空洞の倉庫がいつ出るか決まらないため、`scripts/screenshots.cjs` は9年目のセーブに「今年完成する、資材の手抜きつきの倉庫の普請」を差し込み、投書と能力の高い側近の言及がそろう年が出るまでセーブ ID と乱数の状態を変えて試す（スクリーンショット 14〜17）。ゲームのロジックには手を入れていない | 記録のみ |
 | I-41 | AI診断（デバッグ画面） | `?debug` で開く診断画面を追加（`ui/panels/DebugPanel.tsx`、ロジックは `engine/LLMDiagnostics.ts`）。6段階（設定・到達・認証/CORS・呼び出し・検証・ゲームと同じ経路）を切り分け、原因コードごとに原因と対処を表示。到達の判定は `no-cors` の fetch（接続できたかだけを見る）で、「届くのに読めない」＝ CORS／`ALLOWED_ORIGINS` を区別する。URL とトークンはこの画面の入力で上書きでき、ゲームの設定は変えない。トークンは表示・レポートとも伏せる（先頭2文字と長さ）。診断は本番のプロキシのレート制限と Mistral を数回消費する。あわせて、`LLMServiceProxy` がプロキシのエラーコード（`upstream_401` など）を `LLMError.detail` に残し、`llm.attemptFailed` / `llm.fallback` のログに `detail` を載せるようにした（従来は理由の分類しか残らず、原因を追えなかった） | 記録のみ |
+
+---
+
+## 15. v3.3-UI（表現層）着手前の論点と検証計画（2026-10-26）
+
+### 15.0 経緯
+
+CLAUDE.md §1 のとおり、v3.3-UI は表現層のみの差分仕様で、ゲームロジック（RuleEngine・Construction・Events・NewspaperGenerator・Map.ts の配置ロジックなど）には触れない。本節は、U1〜U4（SPEC_v3.3.md §12）の実装に入る前に、(a) SPEC_v3.3.md §14 の未決事項、(b) 現状のコードベース（`App.tsx`、`ui/scenes/MapScene.ts`、`SaveService.ts`、`vitest.config` 等）を調査して見つかった追加の論点を、選択肢・推奨案・影響範囲の形でまとめる。2026-10-26 にユーザーが優先度上位10件を推奨案どおり承認し、残りの軽微な2件も推奨案で進める扱いとした（§15.5）。このフェーズではアプリのコードは書いていない。
+
+### 15.1 SPEC_v3.3.md §14 由来の論点
+
+| ID | 論点 | 選択肢 | 推奨案 | 影響範囲 | 状態 |
+|----|------|--------|--------|----------|------|
+| AA-01 | 筆書き風の書体（勅令の筆記用、§8.3・§14-1） | (a) OFL の既存の日本語筆書き風書体（Google Fonts 等）から2〜3点に候補を絞り実機で確認 (b) 見つからなければ Noto Serif JP の太字＋CSS/SVG フィルタでインクのにじみを表現（SPEC 記載の既定フォールバック） (c) 自作（工数大） | (a)→だめなら(b)。(b)は SPEC 自体がフォールバックとして明記しているため実装リスクが低い | `ui/desk/objects`（DecreeSheet）, `ASSETS.md` | 承認（推奨案・2026-10-26） |
+| AA-02 | しっぽり明朝 B1・Klee One のライセンス最終確認（§8.3・§14-2） | (a) Google Fonts の配布ページで OFL 1.1 であることを確認し、`docs/ASSETS.md` にライセンスへのリンク・バージョン・取得日を記録する (b) フォント制作者のリポジトリまで遡って確認する | (a)。Google Fonts 掲載時点で OFL 準拠は検証済みのため、配布ページの表記を転記する水準で十分（CLAUDE.md §8 の既存運用と同水準） | `ASSETS.md` | 承認（推奨案・2026-10-26） |
+| AA-03 | 新規依存（simplex-noise 等）の一覧とライセンス（§14 関連） | 候補：`simplex-noise`（MIT、地形のノイズ §5.2）／`d3-delaunay`（ISC、区画の Voronoi・Lloyd 緩和 §5.3）／`@testing-library/react`・`@testing-library/jest-dom`（MIT、AA-13）。都度 DECISIONS に個別記録 vs 本節で一括承認して以後は1行追記のみにする | 本節で一括承認を取り、個別追加時は `package.json` の変更と合わせて本 DECISIONS に1行追記する運用（CLAUDE.md §2 の規定どおり） | `package.json`, `DECISIONS.md` | 承認（推奨案・2026-10-26） |
+| AA-04 | 地図の表題に入れる領地名（§5.4 レイヤ11・§14-4） | (a) 固定の既定名 (b) プレイヤーが開始時に命名（新規入力 UI が要る） (c) 地形生成（Toponyms）から自動命名 | (c)。新規入力 UI を増やさずに済み、`Toponyms.ts` の地名生成（§5.5）とそのまま統合でき、`saveId` から決定論的に再現する | `ui/map/Toponyms`, `ui/desk/objects`（地図の表題） | 承認（推奨案・2026-10-26） |
+| AA-05 | 測量の遅れ（§5.9）の P0 での実装範囲 | (a) 何も作らない（フラグも用意しない） (b) 設定に boolean フラグ（既定 false）だけ用意し、遅延・隠蔽のロジックは実装しない | (b)。CLAUDE.md §10「既定無効のフラグとしてのみ扱う」の文言どおり。製品版での採否（§14-5）はプレイテスト後に判断 | `ui/settings`, `domain/constants` | 記録のみ（推奨案で進める・2026-10-26） |
+| AA-06 | 製品版のジオラマ表現（§14-6） | — | 記録のみ。測量図（標高の立体化）の延長にするか別表現にするかは、P0 のプレイテスト結果が出てから判断する | 将来のロードマップ | 記録のみ（P0対象外） |
+| AA-07 | Tauri 版での WebGL・Worker の動作確認（§14-7） | — | 記録のみ。CLAUDE.md §10「Tauri・Steamworks はやらない」の範囲外で、P0 はブラウザのみ | 将来のロードマップ | 記録のみ（P0対象外） |
+
+### 15.2 コードベース調査で見つかった追加の論点
+
+現状のコードは P0/P1/v3.2 のロジックと、v3.2 相当の最小 UI（`App.tsx` の3列 `desk-grid`、Phaser による抽象グリッド地図、`ResultStack` の書類めくり等）がすでに実装・テスト済みである。v3.3-UI は主にこの上に被せる表現の刷新だが、以下の点は実装前に方針を決めないと U1 から手戻りが生じる。
+
+| ID | 論点 | 選択肢 | 推奨案 | 影響範囲 | 状態 |
+|----|------|--------|--------|----------|------|
+| AA-08 | `DeskStage` への既存パネルの移行方針／平面モードの基準実装 | (a) 既存の `App.tsx` の `desk-grid`（新聞／地図＋勅令／側近の3列）をそのまま「平面モード」の実体として残し、3D 表現はその外側に新しい見た目を重ねる (b) 平面モードも含めて `DeskStage` 配下に全面的に書き直す | (a)。SPEC §12.2 も「まず平面モードで一通り遊べる状態を作り、そこに U1〜U4 を重ねる」としており、既存の `desk-grid` と各パネル（`NewspaperPanel`/`MapPanel`/`DecreePanel`/`AidePanel`/`LedgerPanel`/`ResultStack`/`EndingScreen`）はそのまま平面モードの実装として使える。3D は俯瞰表示を追加するレイヤとして上に重ねる | `ui/App.tsx`, `ui/desk/*` | 承認（推奨案・2026-10-26） |
+| AA-09 | `MapScene` の描画方式（`Phaser.CANVAS` 継続 or WebGL 化）とヘッドレス互換性 | 現状の `ui/scenes/MapScene.ts` は `type: Phaser.CANVAS` を明示している（WebGL ではない）。(a) CANVAS を継続し、地形の Worker/OffscreenCanvas 生成物（ImageBitmap）はテクスチャとして読み込むだけにする (b) SPEC §2.2 の「Phaser（WebGL）を継続」を字義通りに取り、`Phaser.AUTO`／WebGL に切り替える | (a) を既定とし、スパイク1・2（§15.3）の実測で手元（ズーム・パン）の描画が重ければ (b) に切り替える。CANVAS 継続はヘッドレス実行（Playwright でのスクリーンショット・CI）での GPU/WebGL コンテキスト依存を避けられる利点があり、Worker 側の OffscreenCanvas 生成とは独立に選べる | `ui/map/MapScene`, `ui/map/terrain.worker`, `scripts/screenshots.cjs` | 承認（推奨案・2026-10-26） |
+| AA-10 | 区画のオーガニック化（`ParcelMapper`/`RoadRouter`）と `domain/Map.ts` の境界 | (a) `domain/Map.ts`（タイル配置・道路本数のロジック）には一切触れず、`ui/map/ParcelMapper.ts` が `MapState`（論理グリッド）と `TerrainData` を読むだけの表示専用の写像（多角形座標の計算）を担う (b) 表示の都合で `Map.ts` にも区画の座標情報を持たせる | (a)。不変条件4・17（domain は純粋／表現層は GameState を読むだけで書き込まない）を守るには、座標・多角形・曲線化は表示専用のモジュールに閉じ込める必要がある | `ui/map/ParcelMapper`, `ui/map/RoadRouter`, `domain/Map.ts`（変更なしを確認） | 承認（推奨案・2026-10-26） |
+| AA-11 | `PlayerNotes` のセーブ形式（既存セーブとの互換性） | (a) 既存の `SAVE_STORAGE_KEY` の JSON に `notes` フィールドを追加し、`GameState` と同じ1スロットに入れる（`SaveService.decode` の `schemaVersion` 判定とは別に扱う） (b) 別の localStorage キー（例：`imperial-decree/notes`）に独立保存し、ロード時に両方読む (c) 保存の実体を envelope 化（`{ game, notes }`）し `SaveServiceShape` を拡張する | (b)。現行の `SaveService`（`GameState` のみを対象にした `decode`/`SaveError`/`schemaVersion` 判定）を変更せずに済み、「既存セーブとの互換性」もキーが無ければ空配列として扱うだけで自明に保てる。`PlayerNotes` は `GameState` の `schemaVersion` と無関係に進化できる | `services/SaveService`, `domain/PlayerNotes`, `ui/desk/objects`（Notepad） | 承認（推奨案・2026-10-26） |
+| AA-12 | 建物絵記号17種（§10.2）への移行方法 | 現状は `i18n/messages.ts` の `tileGlyphs`（漢字1文字×17種）で代替している。(a) U3 着手時に自作 SVG 17種を一から作り即時差し替え (b) `tileGlyphs` の漢字を暫定プレースホルダーとして使い続け、U3 後半で SVG に差し替える | (b)。`BuildingId` をキーにした対応表という構造は変わらないため、U3 前半（地形・区画・道路）を先に進め、記号のデザイン（SPEC §14-3 の未決事項でもある）が固まった時点で描画実装だけを差し替えられる | `ui/map/MapScene`（描画実装）, `i18n/messages.ts`, `ASSETS.md` | 承認（推奨案・2026-10-26） |
+| AA-13 | Vitest 環境と Testing Library の追加 | 現状の `vite.config.ts` は `test.environment: "node"` で、`@testing-library/*` 系も未導入（DOM 環境なし）。SPEC §13.1「UI のコンポーネントテストは Vitest + Testing Library」を実施するには environment を変える必要がある。(a) UI テスト用に `environment: "jsdom"`（または `happy-dom`）＋ `@testing-library/react`・`@testing-library/jest-dom` を追加 (b) コンポーネントテストは諦め、スクリーンショット（`scripts/screenshots.cjs`）のみで視覚確認する | (a)。既存の `engine`/`domain` のテスト（Node 環境のまま）に影響しないよう、Vitest の `environment` はテストファイル単位でオーバーライドする（`// @vitest-environment jsdom` コメント、または `ui/**` だけを対象にした別の vitest `project`/`workspace` 設定）。新規依存は AA-03 の一覧に含めて承認を取る | `vite.config.ts`, `package.json`, `ui/**/*.test.tsx` | 承認（推奨案・2026-10-26） |
+| AA-14 | 既存の `data-testid`・クラス名の継続 | `scripts/screenshots.cjs` は `.decree-text`／`.intent-margin select`／`.intent-value`／`[data-testid=stamp]`／`[data-testid=result-sheets]`／`.sheet`／`[data-testid=flip]`／`[data-testid=close-result]`／`.decree-panel`／`.result-stack` 等の具体的なセレクタに依存している。(a) DeskStage 移行後もこれらのセレクタ（名前・要素構造）を保つ（3D 表現はラッパーで包むだけにする） (b) UI 刷新に合わせてセレクタも変え、`scripts/screenshots.cjs` を合わせて書き直す | (a)。平面モードでは既存の見た目をほぼ保つ（AA-08）ため、既存セレクタを保つのが最小の変更で済み、スパイク3種の検証や今後のスクリーンショット更新（CLAUDE.md §9 の視覚レビュー義務）も壊れない | `scripts/screenshots.cjs`, 各パネル, `ui/desk/*` | 承認（推奨案・2026-10-26） |
+| AA-15 | `src/ui/scenes/MapScene.ts` → `src/ui/map/MapScene.ts` への移設タイミング | CLAUDE.md §3 の v3.3 追加ファイル一覧は `src/ui/map/MapScene.ts` を想定しているが、現状は `src/ui/scenes/MapScene.ts` にある。(a) U3 着手時に `git mv` で移設し、同じ変更でテレインとの統合も行う (b) 今すぐ移設だけ先行する | (a)。移設だけを先行させても今は中身が変わらないため意味がなく、テレイン統合の変更とまとめて1コミットにする方が差分が追いやすい（CLAUDE.md §9「1コミット1目的」） | `ui/scenes/MapScene.ts` → `ui/map/MapScene.ts` | 記録のみ（推奨案で進める・2026-10-26） |
+
+### 15.3 検証スパイク計画（実装前。コードはこのフェーズでは書いていない）
+
+いずれも本実装のソースツリーの外（スクラッチ）で動かし、結果を本節または `docs/BALANCE.md` に記録してから U1/U3 の実装方針を確定する想定。
+
+| # | スパイク | 目的 | 方法 | 合否基準 | 時間箱 | 失敗時の代替 |
+|---|----------|------|------|----------|--------|--------------|
+| S-1 | CSS 3D 机上オブジェクトの fps | §2.3「統合GPUで俯瞰・手元とも60fps」を満たせるか | 最小のスクラッチ HTML に机上オブジェクト相当（新聞・書簡・勅令用紙・台帳・判子・メモ帳・既決箱・ランプ等、9個程度）を `perspective`/`rotateX`/`translateZ` と `box-shadow`/`drop-shadow` で配置し、ホバー・持ち上げのアニメーション込みで Chrome DevTools Performance／`requestAnimationFrame` で fps を測る。統合GPU相当の実機がなければソフトウェアレンダリング相当で測り、その旨を記録に注記する | 静止時60fps、アニメーション中も45fps を割らない（§9「45fps を下回ったら自動で視差・ぼかし・環境の微動を切る」の閾値と揃える） | 0.5日 | 同時アニメーションを3つまでに制限（§8.2）、`backdrop-filter` を1枚に制限（SPEC既定）、`box-shadow` を事前計算した静的な影画像に置き換える |
+| S-2 | 地形生成の所要時間 | §2.3「新規ゲーム開始時に1.5秒以内」を Worker 内で満たせるか | `simplex-noise` で 2048×2048 のハイトマップを fBm 5〜6オクターブ＋ドメインワーピングで生成し、流量累積で川の経路を1本引くアルゴリズムをスクラッチで実装。Node のベンチスクリプトと、実際のブラウザの Web Worker 双方で計測する | 1.5秒以内（統合GPU/標準的なノートPC相当のCPU） | 1日 | 解像度を1024×1024に下げる、オクターブを減らす、流量累積を粗いグリッドで計算してからアップサンプルする |
+| S-3 | 村域100区画の建設可能性 | §5.2「地形は村域の外側にのみ効き、論理グリッド100区画はすべて建設可能」（不変条件19）が、村域境界に沿わせる川の経路生成と衝突しないか | 盆地化（村域の平坦化）と川の経路（村域内には入れない制約）のアルゴリズムをスクラッチで実装し、シードを1000個変えて全件実行。村域内の全セルが「水なし・急傾斜なし＝建設可能」であることを検証するスクリプトを書く | 1000/1000 シードで100区画すべて建設可能 | 0.5〜1日 | 村域と地形生成の境界にバッファ（マージン）を広げる、または村域内は地形生成の対象から完全に除外し、縁だけ馴染ませる設計に変える |
+
+### 15.4 U1〜U4 作業分解（完了条件つき。SPEC_v3.3.md §12 を現状のコードに合わせて調整）
+
+| フェーズ | 内容 | 完了条件 |
+|----------|------|----------|
+| U1 | 机の骨格：`DeskStage`、`DeskObject`、俯瞰⇄手元、擬似照明と影、平面モード | ・既存の5パネル（`NewspaperPanel`/`MapPanel`+`DecreePanel`/`AidePanel`/`LedgerPanel`/`ResultStack`/`EndingScreen`）が `DeskStage` の下で表示され、平面モードでは現行の `desk-grid` と情報が同一（不変条件23）・俯瞰⇄手元の切替が動作し、手元レイヤは `transform: none`（不変条件25）・S-1 の結果を反映（重ければ演出を簡略化）・既存の `data-testid`/クラス名を保ち、`scripts/screenshots.cjs` が無改造または最小改造で動く・`npm run typecheck`/`npm test`/`npm run lint` 通過 |
+| U2 | 書類の作り込み：勅令の筆記と付箋、判子、結果束のめくり、台帳、既決箱 | ・`DecreePanel` の入力が勅令用紙の見た目（筆記表現、AA-01）に統合され、タグが付箋として表示される・残り文字数表示など既存の不変条件は変更なし・既存の `ResultStack`（めくり・`flips`/`deepestSheet` の KPI）が `DeskObject` としてそのまま使える・台帳が `LedgerPanel` をもとに年ごとのページめくり（直近10年の折れ線）に拡張・既決箱が `history` から過去ターンの新聞・書簡・結果を取り出せる |
+| U3 | 測量図：地形生成 Worker、区画写像、道路、絵記号17種、地名、手元の地図操作、俯瞰用スナップショット | ・S-2・S-3 の合否基準を満たす（または緩和した代替案で満たす）・`domain/Map.ts` のロジック（タイル配置・道路本数）は無変更（AA-10）・地形の決定論／村域100区画の建設可能性／道路が区画内部を横切らない／地名の一意性のテストが Vitest（AA-13 の環境で）で通る・俯瞰用スナップショット（`MapSnapshot`）と手元のライブ地図（`MapScene`）が同じ `TerrainData` を使う（決定論） |
+| U4 | 演出と仕上げ：ターン遷移シーケンス、インクの描き込み、並べ読み、メモ、効果音、性能調整 | ・ターン遷移が合計4〜6秒でスキップ可能、`prefers-reduced-motion` で短縮（不変条件24）・`PlayerNotes` の作成・留め・セーブが動作し、`notes` キーのない既存セーブを壊さずに読み込める（AA-11 の決定に従う）・効果音は CC0／自作のみで `docs/ASSETS.md` に記録・45fps を下回ったら視差・ぼかし・環境の微動を自動で切る・SPEC §13.1 の残りのテスト（平面/3D の表示情報が同一、`prefers-reduced-motion` 等）が通る |
+
+推奨する着手順は SPEC §12.2 のとおり：平面モードを含む U1 を最初に通し、その後 U2→U3→U4、または時間が足りなければ U4 の演出（§12.3 の削ってよいものリスト）を削る。
+
+### 15.5 ユーザーへの確認と承認結果（2026-10-26）
+
+優先度順に最大10件（AA-08, AA-09, AA-14, AA-11, AA-13, AA-10, AA-03, AA-12, AA-01/AA-02, AA-04）をまとめて確認し、**すべて推奨案どおり承認**を得た。残りの軽微な2件（AA-05 測量の遅れのフラグ化、AA-15 `MapScene.ts` の移設タイミング）も異論がなかったため、CLAUDE.md §1.2「軽微なものは推奨案で進めて記録だけ残してよい」に従い推奨案で進める扱いとした。AA-06・AA-07 は元から記録のみ（P0対象外）。これで §15 の論点はすべて解決済み。U1（机の骨格）から着手できる状態になった。
