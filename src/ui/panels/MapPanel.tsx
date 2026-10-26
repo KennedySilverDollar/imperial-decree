@@ -21,12 +21,13 @@ export interface WorkItem {
 export function MapPanel({ map, works }: { readonly map: MapState; readonly works: readonly WorkItem[] }) {
   const host = useRef<HTMLDivElement>(null);
   const scene = useRef<MapScene | null>(null);
+  const game = useRef<Phaser.Game | null>(null);
 
   useEffect(() => {
     if (!host.current) return;
     const mapScene = new MapScene();
     const size = MAP_PIXELS(GRID_SIZE);
-    const game = new Phaser.Game({
+    const instance = new Phaser.Game({
       type: Phaser.CANVAS,
       parent: host.current,
       width: size,
@@ -36,16 +37,22 @@ export function MapPanel({ map, works }: { readonly map: MapState; readonly work
       banner: false,
       audio: { noAudio: true },
     });
+    // 地図は年に一度しか変わらないので、描いたらループを止める。毎フレーム描き直すと、
+    // 机の上（3D の層）や手元の背景のぼかしまで毎フレーム合成し直しになり、統合 GPU では重い
+    instance.events.on(Phaser.Core.Events.POST_RENDER, () => instance.loop.sleep());
+    game.current = instance;
     scene.current = mapScene;
     return () => {
       scene.current = null;
-      game.destroy(true);
+      game.current = null;
+      instance.destroy(true);
     };
   }, []);
 
-  // シーンの create 前に渡された地図は保留され、create 時に描かれる
+  // シーンの create 前に渡された地図は保留され、create 時に描かれる。描き直す1フレームだけループを起こす
   useEffect(() => {
     scene.current?.setMap(map);
+    game.current?.loop.wake();
   }, [map]);
 
   const legend = messages.ui.map.legend;
