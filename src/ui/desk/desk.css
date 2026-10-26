@@ -1,0 +1,516 @@
+/* 執務机（SPEC_v3.3 §2〜§4・§9）。styles.css の紙・判子・書類の様式の上に、机の置き方だけを足す。
+   原則：手元（.is-focused / .is-companion）と平面モード（.mode-flat）では書類に変形を掛けない（不変条件25）。 */
+
+/* 視差・持ち上げの変数は継承させない：変わるたびに書類の中身（数千の要素）まで計算し直さないように */
+@property --lift {
+  syntax: "<length>";
+  inherits: false;
+  initial-value: 0px;
+}
+@property --parallax-x {
+  syntax: "<angle>";
+  inherits: false;
+  initial-value: 0deg;
+}
+@property --parallax-y {
+  syntax: "<angle>";
+  inherits: false;
+  initial-value: 0deg;
+}
+
+:root {
+  --desk-dark: #24180d;
+  --new-paper: #f1e8d2;
+  --lamp-light: #f2c48a;
+  --ease-lift: cubic-bezier(0.32, 0.72, 0.24, 1);
+  --focus-ms: 350ms;
+  --reduced-fade-ms: 0ms;
+  --text-zoom: 1;
+}
+
+/* ---------- 立体の机 ---------- */
+/* overflow: clip — hidden と違い、入力欄へのスクロールなどで机ごと横にずれることがない */
+.desk.mode-3d {
+  position: fixed;
+  inset: 0;
+  padding: 0;
+  overflow: clip;
+  background: var(--desk-dark);
+}
+
+.desk.mode-3d .desk-header {
+  position: relative;
+  z-index: 80;
+  height: 52px;
+  margin: 0;
+  padding: 0 24px;
+  background: linear-gradient(to bottom, rgb(14 9 4 / 85%), rgb(14 9 4 / 40%));
+}
+
+.keys-hint {
+  font-size: 11px;
+  letter-spacing: 0.06em;
+  color: rgb(232 220 192 / 55%);
+}
+
+.desk-stage {
+  position: relative;
+  overflow: clip;
+}
+
+/* 設定・エンディング・平面の結果束（.overlay）は、机の中の重なり（照明 30・手元の背景 40・手元 60）より上。
+   机を重なりの単位（stacking context）に閉じ込めると、照明の重ね（soft-light）のために机全体を別の面に描くことになり重いので、
+   こちらを上げる */
+.desk .overlay {
+  z-index: 90;
+}
+
+/* 天板：木目＋擬似照明（lighting.ts の --tabletop-light） */
+.tabletop {
+  position: absolute;
+  transform-origin: 50% 50%;
+  border-radius: 10px;
+  background-color: var(--desk);
+  background-image:
+    var(--tabletop-light),
+    repeating-linear-gradient(92deg, rgb(0 0 0 / 8%) 0 3px, transparent 3px 17px),
+    repeating-linear-gradient(88deg, rgb(255 230 190 / 3.5%) 0 2px, transparent 2px 41px),
+    repeating-linear-gradient(90.6deg, rgb(0 0 0 / 5%) 0 1px, transparent 1px 7px);
+  box-shadow:
+    inset 0 0 0 26px rgb(36 24 13 / 55%),
+    inset 0 0 120px rgb(0 0 0 / 45%);
+}
+
+/* 机上の物：位置と変形は DeskObject がインラインで与える */
+.desk-object {
+  position: absolute;
+  overflow: hidden;
+  border-radius: 2px;
+  transition:
+    transform var(--focus-ms) var(--ease-lift),
+    left var(--focus-ms) var(--ease-lift),
+    top var(--focus-ms) var(--ease-lift),
+    box-shadow var(--focus-ms) ease,
+    filter var(--focus-ms) ease;
+}
+
+.desk-object.is-overview {
+  cursor: pointer;
+}
+
+.desk-object.is-overview:hover,
+.desk-object.is-overview:focus-visible {
+  --lift: 16px;
+}
+
+.desk-object.is-overview:focus-visible {
+  outline: 4px solid var(--vermilion);
+  outline-offset: 6px;
+}
+
+/* 影：紙は矩形、小物は輪郭（lighting.ts が高さと光源から計算） */
+.desk-object.shadow-box.is-overview {
+  box-shadow: var(--shadow);
+}
+.desk-object.shadow-box.is-overview:hover,
+.desk-object.shadow-box.is-overview:focus-visible {
+  box-shadow: var(--shadow-lifted);
+}
+.desk-object.shadow-drop {
+  overflow: visible;
+  filter: var(--drop);
+}
+.desk-object.shadow-drop.is-overview:hover {
+  filter: var(--drop-lifted);
+}
+
+/* 手元：変形なしで正対。長い書類は紙の中でスクロール */
+.desk-object.is-focused,
+.desk-object.is-companion {
+  transform: none;
+  overflow: auto;
+  cursor: auto;
+  overscroll-behavior: contain;
+}
+.desk-object.shadow-box.is-focused,
+.desk-object.shadow-box.is-companion {
+  box-shadow:
+    0 2px 4px rgb(0 0 0 / 35%),
+    0 26px 64px rgb(0 0 0 / 55%);
+}
+.desk-object.shadow-drop.is-companion {
+  filter: drop-shadow(0 18px 22px rgb(0 0 0 / 50%));
+}
+.desk-object.is-focused:focus {
+  outline: none;
+}
+
+/* 動きを減らす：移動は即時、手元に来たものだけ短くフェード（§8.2） */
+.reduce-motion .desk-object,
+.reduce-motion .focus-backdrop,
+.is-instant .desk-object,
+.is-instant .focus-backdrop {
+  transition: none !important;
+}
+.reduce-motion .desk-object.is-focused,
+.reduce-motion .desk-object.is-companion {
+  animation: focus-fade var(--reduced-fade-ms) ease-out;
+}
+@keyframes focus-fade {
+  from {
+    opacity: 0;
+  }
+}
+
+/* 俯瞰で物にかざすと出る、鉛筆書きの小札（変形の外に平らに描く） */
+.desk-tag {
+  position: absolute;
+  z-index: 35;
+  transform: translate(-50%, calc(-100% - 10px));
+  padding: 1px 12px;
+  background: #efe6cf;
+  color: var(--pencil);
+  font-family: var(--serif);
+  font-size: 15px;
+  font-style: italic;
+  border: 1px solid rgb(91 85 72 / 35%);
+  box-shadow: 0 3px 8px rgb(0 0 0 / 35%);
+  pointer-events: none;
+  white-space: nowrap;
+  animation: tag-in 150ms ease-out;
+}
+@keyframes tag-in {
+  from {
+    opacity: 0;
+  }
+}
+.reduce-motion .desk-tag {
+  animation: none;
+}
+
+/* 手元の文字サイズ（§9）。地図の画面だけは縮尺を保つ */
+.desk-object-content,
+.flat-object {
+  zoom: var(--text-zoom);
+}
+.desk-object-content .map-canvas,
+.flat-object .map-canvas {
+  zoom: calc(1 / var(--text-zoom));
+}
+
+/* 手に取った物の後ろ：机を暗く、ぼかすのはこの1枚だけ（§4.1） */
+.focus-backdrop {
+  position: absolute;
+  inset: 0;
+  z-index: 40;
+  background: rgb(14 9 4 / 0%);
+  pointer-events: none;
+  transition: background var(--focus-ms) ease;
+}
+.focus-backdrop.is-active {
+  background: rgb(14 9 4 / 58%);
+  pointer-events: auto;
+}
+.focus-backdrop.is-active.with-blur {
+  backdrop-filter: blur(3px);
+}
+.focus-hint {
+  position: absolute;
+  bottom: 12px;
+  left: 0;
+  right: 0;
+  margin: 0;
+  text-align: center;
+  font-family: var(--sans);
+  font-size: 12px;
+  color: rgb(232 220 192 / 70%);
+}
+
+/* 書類にも掛かる照明の重ね（ランプの温かさと縁の陰り） */
+.lighting-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 30;
+  pointer-events: none;
+  mix-blend-mode: soft-light;
+}
+
+/* ---------- 机の上の書類の体裁（立体の机のとき） ---------- */
+/* 紙そのものが物になるもの（新聞・台帳）は余白なし。それ以外は台紙（一段濃い羊皮紙）に載せる */
+.desk-object.shadow-box {
+  background-color: #dccdab;
+  background-image:
+    radial-gradient(ellipse at 20% 10%, rgb(255 255 255 / 22%), transparent 60%),
+    repeating-linear-gradient(0deg, rgb(43 29 14 / 3%) 0 1px, transparent 1px 4px);
+  padding: 16px 18px 14px;
+}
+.desk-object-newspaper.shadow-box,
+.desk-object-ledger.shadow-box {
+  padding: 0;
+  background: none;
+}
+.desk-object .newspaper,
+.desk-object .ledger {
+  box-shadow: none;
+}
+.desk-object .ledger {
+  margin: 0;
+}
+
+/* 木の上の淡い文字を、紙の上のインクの色に */
+.desk-object .panel-title,
+.desk-object .panel-note,
+.desk-object .map-legend,
+.desk-object .works,
+.desk-object .works-title,
+.desk-object .appoint-heading,
+.desk-object .thinking,
+.desk-object .result-heading,
+.desk-object .sheet-count,
+.desk-object .decree-status .panel-note {
+  color: var(--ink-soft);
+}
+.desk-object .warning-text,
+.desk-object .decree-status .warning-text,
+.desk-object .aide-panel > .warning-text {
+  color: var(--warning);
+}
+.desk-object .legend-swatch {
+  border-color: var(--ink-faint);
+}
+.desk-object .sheet-controls .button:not(.primary) {
+  color: var(--ink);
+  border-color: var(--ink-soft);
+}
+.desk-object .map-canvas {
+  box-shadow: 0 2px 6px rgb(0 0 0 / 25%);
+}
+.desk-object-result .result-stack {
+  width: auto;
+}
+.desk-object-letters .aide-list {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+/* 手元と平面では書類の小さな傾きも外す（入力欄・文字を正対させる） */
+.desk-object .newspaper,
+.desk-object .letter,
+.desk-object .intent-margin,
+.desk-object .map-canvas,
+.flat-object .newspaper,
+.flat-object .letter,
+.flat-object .intent-margin,
+.flat-object .map-canvas,
+.sheet-current {
+  transform: none;
+}
+
+/* 俯瞰で読むだけの勅令用紙 */
+.decree-preview {
+  margin: 0;
+  padding: 2px 0;
+  min-height: 2.6em;
+  border-bottom: 1px solid var(--ink-faint);
+  font-size: 22px;
+  line-height: 1.6;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.decree-preview.is-blank {
+  color: rgb(43 29 14 / 35%);
+}
+.tags-preview {
+  min-height: 1.5em;
+  margin: 8px 0 0;
+  padding: 0;
+  list-style: none;
+}
+.intent-preview {
+  margin-bottom: 0;
+}
+
+/* ---------- 判子と朱肉 ---------- */
+.stamp-object {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 0 4px;
+}
+.inkpad {
+  width: 104px;
+  height: 38px;
+  border-radius: 50% / 45%;
+  background: radial-gradient(ellipse at 45% 40%, #9a3a2e, #6a221a 70%, #3e130e);
+  box-shadow:
+    inset 0 3px 6px rgb(0 0 0 / 55%),
+    0 0 0 5px #6b5236,
+    0 0 0 6px #3e2c1a;
+}
+.stamp-object .seal-button {
+  transition:
+    transform 160ms ease,
+    box-shadow 160ms ease,
+    filter 160ms ease,
+    outline-color 160ms;
+}
+/* 押せるとき：色（光）だけでなく、破線の輪でも示す（不変条件24）。判子は暗い机の上にあるので輪は紙の色 */
+.stamp-object.is-ready .seal-button {
+  outline: 2px dashed rgb(232 220 192 / 85%);
+  outline-offset: 6px;
+  box-shadow:
+    0 4px 0 #5e1f18,
+    0 8px 14px rgb(0 0 0 / 35%),
+    0 0 26px rgb(242 196 138 / 60%);
+}
+.stamp-object.is-pressing .seal-button {
+  transform: translateY(6px) scale(0.96);
+  box-shadow:
+    0 1px 0 #5e1f18,
+    0 2px 4px rgb(0 0 0 / 35%);
+}
+.desk-object-stamp .stamp-caption {
+  color: rgb(232 220 192 / 80%);
+}
+
+/* ---------- ランプ（CSS の図形のみ） ---------- */
+.lamp {
+  position: relative;
+  width: 200px;
+  height: 300px;
+}
+.lamp-glow {
+  position: absolute;
+  inset: -80px -100px 40px;
+  border-radius: 50%;
+  background: radial-gradient(circle at 50% 38%, rgb(242 196 138 / 55%), rgb(242 196 138 / 12%) 45%, transparent 70%);
+}
+.lamp-chimney {
+  position: absolute;
+  left: 70px;
+  top: 30px;
+  width: 60px;
+  height: 120px;
+  border-radius: 28px 28px 10px 10px;
+  background: linear-gradient(90deg, rgb(255 240 210 / 35%), rgb(255 248 230 / 75%) 45%, rgb(255 240 210 / 30%));
+  box-shadow: 0 0 40px rgb(242 196 138 / 70%);
+}
+.lamp-body {
+  position: absolute;
+  left: 46px;
+  top: 148px;
+  width: 108px;
+  height: 92px;
+  border-radius: 50% 50% 40% 40%;
+  background: radial-gradient(circle at 35% 30%, #c79a52, #7d5a2a 60%, #4a3416);
+}
+.lamp-base {
+  position: absolute;
+  left: 30px;
+  top: 236px;
+  width: 140px;
+  height: 30px;
+  border-radius: 50%;
+  background: linear-gradient(#5a4020, #2f2110);
+}
+
+/* ---------- 平面モード ---------- */
+.desk.mode-flat .flat-desk > .flat-object-ledger {
+  margin-bottom: 18px;
+}
+.flat-object {
+  min-width: 0;
+}
+.flat-object:focus {
+  outline: none;
+}
+.flat-object:focus-visible {
+  outline: 2px solid var(--vermilion);
+  outline-offset: 4px;
+}
+.flat-object.is-openable {
+  cursor: pointer;
+}
+.decree-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 128px;
+  gap: 14px;
+  align-items: start;
+}
+.decree-row > .flat-object-stamp {
+  padding-top: 70px;
+}
+.flat-object-stamp .stamp-caption {
+  color: rgb(232 220 192 / 80%);
+}
+.overlay > .flat-object-result {
+  width: min(580px, 100%);
+}
+
+/* ---------- 設定 ---------- */
+.settings-sheet {
+  width: min(520px, 100%);
+  padding: 24px 28px 20px;
+  font-family: var(--sans);
+  font-size: 14px;
+}
+.settings-sheet:focus {
+  outline: none;
+}
+.settings-title {
+  margin: 0 0 14px;
+  font-family: var(--serif);
+  font-size: 18px;
+  letter-spacing: 0.15em;
+}
+.settings-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 0 0 12px;
+}
+.settings-sizes {
+  border: none;
+  padding: 0;
+  flex-wrap: wrap;
+}
+.settings-sizes label {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin-right: 14px;
+}
+.settings-label {
+  min-width: 9em;
+  color: var(--ink-soft);
+  padding: 0;
+}
+.settings-dev {
+  color: var(--ink-soft);
+  font-size: 12px;
+}
+.settings-actions {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 8px;
+}
+
+/* ---------- 開発用 FPS ---------- */
+.fps-overlay {
+  position: fixed;
+  right: 10px;
+  bottom: 10px;
+  z-index: 100;
+  display: flex;
+  gap: 10px;
+  padding: 4px 10px;
+  border-radius: 3px;
+  background: rgb(14 9 4 / 80%);
+  color: #d8e6c8;
+  font-family: ui-monospace, monospace;
+  font-size: 12px;
+  pointer-events: none;
+}
+.fps-low {
+  color: #e2b6a8;
+}
