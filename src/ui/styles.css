@@ -774,6 +774,11 @@ select,
   color: var(--paper);
 }
 
+/* .button:hover より強く（でないと、かざしたときに朱が抜けて紙色の文字が読めなくなる） */
+.button.primary:hover:not(:disabled) {
+  background: #b8473a;
+}
+
 .button.danger {
   border-color: var(--warning);
   color: var(--warning);
