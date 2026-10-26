@@ -8,7 +8,7 @@ import { RngLive } from "../services/Rng";
 import { SaveServiceInMemory } from "../services/SaveService";
 
 const [stewardProfile, merchantProfile] = INITIAL_AIDE_PROFILES;
-if (!stewardProfile || !merchantProfile) throw new Error("初期側近が定義されていない");
+if (!stewardProfile || !merchantProfile) throw new Error("initial aide profiles are not defined");
 export const steward: Aide = makeAide(stewardProfile, 0);
 export const merchant: Aide = makeAide(merchantProfile, 0);
 

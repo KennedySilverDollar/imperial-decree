@@ -23,7 +23,6 @@ import { factLabel, formatReport, hintFor } from "../debugReport";
 // ゲームの状態・設定には一切触れない（入力欄の上書きはこの画面の診断だけに効く）。
 
 const t = messages.ui.debug;
-const DEFAULT_DECREE = "道を大いに造れ";
 
 interface Props {
   readonly llmMode: "proxy" | "mock";
@@ -89,7 +88,7 @@ export function DebugPanel({ llmMode, envUrl, envToken }: Props) {
   const [url, setUrl] = useState(envUrl);
   const [token, setToken] = useState(envToken);
   const [showToken, setShowToken] = useState(false);
-  const [text, setText] = useState(DEFAULT_DECREE);
+  const [text, setText] = useState<string>(t.form.defaultText);
   const [target, setTarget] = useState<Target | "">("");
   const [scale, setScale] = useState<ScaleTagValue | "">("");
   const [results, setResults] = useState<Results>({});

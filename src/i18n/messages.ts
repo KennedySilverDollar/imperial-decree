@@ -337,6 +337,7 @@ export const messages = {
         show: "表示する",
         hide: "隠す",
         text: "試す勅令",
+        defaultText: "道を大いに造れ",
         target: "対象タグ",
         scale: "規模タグ",
         none: "なし",
