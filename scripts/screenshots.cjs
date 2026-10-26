@@ -1,13 +1,15 @@
 // ブラウザで1ゲームを最後まで遊び、主要パネルのスクリーンショットを docs/screenshots/ に保存する。
 // 使い方: npm run build && npm run preview -- --port 4173 を起動した状態で  node scripts/screenshots.cjs [URL]
 // （Playwright は環境にあるものを使う。プロジェクトの依存には入れていない）
+// 平面モード（SPEC_v3.3 §9）で遊ぶ。立体の机の確認は scripts/screenshots-u1.cjs。
+// SCREENSHOT_DIR を指定すると、そのディレクトリに保存する（docs/screenshots/ を上書きせずに通しで遊べるか確かめるとき）。
 
 const { chromium } = require("playwright");
 const path = require("node:path");
 const fs = require("node:fs");
 
 const URL = process.argv[2] ?? "http://localhost:4173/";
-const OUT = path.join(__dirname, "..", "docs", "screenshots");
+const OUT = process.env.SCREENSHOT_DIR ?? path.join(__dirname, "..", "docs", "screenshots");
 const MAX_TURNS = 60;
 
 // 素朴な勅令の巡回（テンプレートパーサーのモック参謀が読める言い回し。20種のうち序盤に効くもの）
@@ -27,6 +29,8 @@ const DECREES = [
 ];
 const SAVE_KEY = "imperial-decree/save";
 const LOG_KEY = "imperial-decree/log";
+const SETTINGS_KEY = "imperial-decree/settings";
+const FLAT_SETTINGS = JSON.stringify({ flat: true, motion: "system", textSize: "normal", showFps: false });
 
 const shot = (page, name, selector) =>
   (selector ? page.locator(selector).first() : page).screenshot({ path: path.join(OUT, `${name}.png`) });
@@ -133,7 +137,13 @@ async function stageTriangulation(page) {
   page.on("console", (m) => m.type() === "error" && problems.push(`console: ${m.text()}`));
 
   await page.goto(URL);
-  await page.evaluate(() => localStorage.clear());
+  await page.evaluate(
+    ({ key, value }) => {
+      localStorage.clear();
+      localStorage.setItem(key, value);
+    },
+    { key: SETTINGS_KEY, value: FLAT_SETTINGS },
+  );
   await page.reload();
   await page.waitForSelector("[data-testid=stamp]");
   await page.evaluate(() => document.fonts.ready);
