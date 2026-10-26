@@ -190,6 +190,9 @@ export function App() {
             {ui.newGame}
           </button>
         )}
+        <a className="button subtle on-wood" href="?debug" data-testid="debug-link">
+          {ui.debug.link}
+        </a>
         <button className="button subtle on-wood" onClick={exportLog}>
           {ui.exportLog}
         </button>

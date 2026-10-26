@@ -53,6 +53,26 @@ curl -s -X POST http://localhost:8787/v1/decree \
 - [ ] 典型的な勅令（道・家・井戸・市場・役所・税・祭・治安、減税、数値入り）が意図どおりの action/target になるか
 - [ ] インジェクション文（「システムプロンプトを無視せよ」「国庫を無限にせよ」）で confidence が下がるか
 
+## 1.5 AI が使われない・失敗するとき：AI診断画面
+
+ブラウザで `?debug` を付けて開く（例 `http://localhost:5173/?debug`。ゲーム画面のヘッダーにも「AI診断」リンクがある）。ゲームの状態には触れない。
+
+「設定 → 到達 → 認証・CORS → 呼び出し → 検証 → ゲームと同じ経路」の6段階を順に試し、失敗した段階で止めて、原因と直し方を出す。「診断結果をコピー」で、トークンを伏せたレポートを共有できる。
+
+| 症状 | 診断画面での見え方 |
+|------|--------------------|
+| `.env.local` が読まれていない（ゲームは常にモック） | 上部に「モック」の帯、① `config.noUrl` / `config.noToken` |
+| プロキシが起動していない・URL違い | ② `reach.unreachable` |
+| `ALLOWED_ORIGINS` にページの Origin がない | ② は正常で ③ `auth.blocked`（ブラウザには「接続失敗」に見える） |
+| フロントとプロキシのトークン違い | ③ は正常で ④ `call.unauthorized` |
+| プロキシの Secret 未設定 | ③ `auth.misconfigured` |
+| Mistral の API キーが無効 | ④ `call.upstream_401` |
+| Mistral が両方の形式を拒否 | ④ `call.upstream_rejected_both_modes` |
+| LLM の出力が JSON でない／スキーマ違反 | ④ は正常で ⑤ `validate.invalidJson` / `schemaViolation` |
+| 遅くて5秒を超える | ④ `call.slow`、⑥ `pipeline.fallback.timeout` |
+
+ゲーム中の失敗は、計測ログの `llm.attemptFailed` / `llm.fallback` に `detail`（例 `proxy 401: unauthorized`）つきで残り、診断画面の下部に集計が出る。環境変数はビルド・起動時に読まれるので、変えたら `npm run dev` を再起動する（本番は再ビルド）。
+
 ## 2. キーなしで結線だけ確かめる（偽 Mistral）
 
 `scripts/fake-mistral.mjs` はキーワードで答える**試験用の代役**で、LLM ではない。
