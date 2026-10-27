@@ -116,9 +116,9 @@ export const deskReducer = (state: DeskUiState, action: DeskAction): DeskUiState
       return { ...state, draft: EMPTY_DRAFT, draftKey: action.key, stamping: false, pages, noteDraft: { ...state.noteDraft, target: "none" } };
     }
     case "stampStart":
-      return { ...state, stamping: true };
+      return state.stamping ? state : { ...state, stamping: true };
     case "stampEnd":
-      return { ...state, stamping: false };
+      return state.stamping ? { ...state, stamping: false } : state;
     case "resultArrived":
       return {
         ...pickUp({ ...state, result: freshResultView(action.turn) }, "result"),

@@ -8,6 +8,8 @@ import { fitDesk, focusSlots, screenPoint, tabletopStyle, type Size } from "./ge
 import { keyTargetOf } from "./keyboard";
 import { LAMP_LIGHT, lightingOverlay, tabletopLighting } from "./lighting";
 import { DESK_OBJECTS, isPickable, type DeskObjectId, type PickableId } from "./objects";
+import type { Weather } from "../transitions/weather";
+import { WindowLight } from "./WindowLight";
 
 // 執務机（SPEC_v3.3 §2.2・§3）：DOM ＋ CSS 3D。天板と机上の物を、同じ原点・同じ傾きで寝かせて置く。
 // ステージ自身は変形しない（手元の書類が祖先の変形を受けずに正対できるように）。
@@ -25,6 +27,8 @@ interface Props {
   readonly richLighting: boolean;
   /** 遷移を飛ばした直後（Space）：transition を一瞬だけ切る */
   readonly instant: boolean;
+  /** 窓の光の天候（§4.5-3） */
+  readonly weather: Weather;
 }
 
 const stateOf = (id: DeskObjectId, desk: DeskUiState): DeskObjectState => {
@@ -34,7 +38,7 @@ const stateOf = (id: DeskObjectId, desk: DeskUiState): DeskObjectState => {
   return "overview";
 };
 
-export function DeskStage({ objects, render, desk, stage, onPick, onPutDown, parallax, richLighting, instant }: Props) {
+export function DeskStage({ objects, render, desk, stage, onPick, onPutDown, parallax, richLighting, instant, weather }: Props) {
   const root = useRef<HTMLDivElement>(null);
   const frame = useRef(0);
   const [indicated, setIndicated] = useState<DeskObjectId | null>(null);
@@ -108,6 +112,7 @@ export function DeskStage({ objects, render, desk, stage, onPick, onPutDown, par
         );
       })}
       {richLighting && <div className="lighting-overlay" aria-hidden style={{ background: lightingOverlay(lamp, stage) }} />}
+      <WindowLight weather={weather} />
       {indicated !== null && !inHand && <PencilTag id={indicated} fit={fit} />}
       <FocusLayer active={inHand} blur={richLighting} onPutDown={onPutDown} />
     </div>

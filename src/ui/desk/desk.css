@@ -1493,3 +1493,324 @@
   width: 100% !important;
   height: 100% !important;
 }
+
+/* ---------- U4：ターン遷移シーケンス（SPEC_v3.3 §4.5）。段ごとの長さは --seq-ms ---------- */
+/* 重さを感じるイージング（立ち上がりは遅く、着地はわずかに沈む。§8.2） */
+.desk {
+  --ease-heavy: cubic-bezier(0.55, 0, 0.3, 1.25);
+}
+.sequence-skip {
+  position: fixed;
+  inset: 52px 0 0;
+  z-index: 85;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  padding: 0 0 18px;
+  border: 0;
+  background: transparent;
+  cursor: pointer;
+}
+.sequence-skip-hint {
+  padding: 4px 12px;
+  background: rgb(20 13 6 / 55%);
+  border-radius: 2px;
+  font-family: var(--sans);
+  font-size: 12px;
+  letter-spacing: 0.1em;
+  color: rgb(232 220 192 / 85%);
+}
+
+/* 2. 勅令用紙が畳まれ、既決箱へ（机に戻り終えるまで待ってから） */
+@keyframes decree-file {
+  0%,
+  55% {
+    translate: 0 0;
+    scale: 1 1;
+    opacity: 1;
+  }
+  75% {
+    scale: 0.55 0.3;
+  }
+  100% {
+    translate: var(--file-dx, 0) var(--file-dy, 80px);
+    scale: 0.2 0.12;
+    opacity: 0;
+  }
+}
+.seq-file [data-object="decree"],
+.seq-waiting [data-object="decree"] {
+  animation: decree-file var(--seq-ms) ease-in forwards;
+}
+.seq-waiting [data-object="decree"] {
+  animation-duration: 1ms;
+}
+/* 新しい勅令用紙は、配達のあとにそっと置かれる */
+@keyframes sheet-arrive {
+  from {
+    opacity: 0;
+  }
+}
+.seq-delivery [data-object="decree"],
+.seq-ledger [data-object="decree"] {
+  animation: sheet-arrive 400ms ease-out;
+}
+
+/* 古い新聞・書簡・結果束は既決箱へ片付き（消え）、5 の配達で新しいものが届く */
+.seq-file :is([data-object="newspaper"], [data-object="letters"], [data-object="result"]),
+.seq-waiting :is([data-object="newspaper"], [data-object="letters"], [data-object="result"]),
+.seq-weather :is([data-object="newspaper"], [data-object="letters"], [data-object="result"]),
+.seq-map :is([data-object="newspaper"], [data-object="letters"], [data-object="result"]) {
+  opacity: 0;
+  transition: opacity 300ms ease;
+}
+/* 5. 配達：上から置かれ、わずかに沈む。同時に動くのは3つまで（§8.2）、少しずつずらす */
+@keyframes deliver {
+  0% {
+    translate: 0 -70px;
+    opacity: 0;
+  }
+  70% {
+    translate: 0 4px;
+    opacity: 1;
+  }
+  100% {
+    translate: 0 0;
+    opacity: 1;
+  }
+}
+.seq-delivery [data-object="newspaper"] {
+  animation: deliver calc(var(--seq-ms) * 0.6) var(--ease-heavy) both;
+}
+.seq-delivery [data-object="letters"] {
+  animation: deliver calc(var(--seq-ms) * 0.6) var(--ease-heavy) calc(var(--seq-ms) * 0.2) both;
+}
+.seq-delivery [data-object="result"] {
+  animation: deliver calc(var(--seq-ms) * 0.6) var(--ease-heavy) calc(var(--seq-ms) * 0.4) both;
+}
+
+/* 4. 地図の更新：地図を少し持ち上げて目を引く（描き込みは Canvas） */
+.seq-map .desk-object-map.is-overview {
+  --lift: 12px;
+}
+
+/* 6. 台帳の該当年のページに数字が書き込まれる（左から右へ現れる） */
+@keyframes ledger-ink {
+  from {
+    clip-path: inset(0 100% 0 0);
+  }
+  to {
+    clip-path: inset(0 0 0 0);
+  }
+}
+.seq-ledger .ledger-items dd {
+  animation: ledger-ink var(--seq-ms) ease-out both;
+}
+
+/* エンディング：成功は地図に町の印章、ゲームオーバー・時間切れはランプが消える */
+.town-seal {
+  position: absolute;
+  top: 46%;
+  left: 50%;
+  z-index: 3;
+  display: grid;
+  place-items: center;
+  width: 150px;
+  height: 150px;
+  margin: -75px 0 0 -75px;
+  border: 6px double var(--vermilion);
+  border-radius: 6px;
+  color: var(--vermilion);
+  font-family: var(--brush);
+  font-size: 96px;
+  line-height: 1;
+  transform: rotate(-8deg);
+  mix-blend-mode: multiply;
+  pointer-events: none;
+  animation: seal-on 900ms var(--ease-heavy) both;
+}
+@keyframes seal-on {
+  from {
+    scale: 2.4;
+    opacity: 0;
+  }
+  60% {
+    scale: 0.94;
+    opacity: 1;
+  }
+  to {
+    scale: 1;
+    opacity: 0.92;
+  }
+}
+.desk-object-map,
+.flat-object-map {
+  position: relative;
+}
+.lamp .lamp-glow {
+  transition: opacity 1800ms ease-in;
+}
+.lamp.is-out .lamp-glow {
+  opacity: 0;
+}
+.desk::after {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: 70;
+  background: rgb(8 5 2 / 0%);
+  pointer-events: none;
+  transition: background 2000ms ease-in;
+}
+.desk.lamp-out::after {
+  background: rgb(8 5 2 / 55%);
+}
+
+/* 動きを減らす（§8.2）：移動をやめてフェードだけ。印章も拡大せずに現れる */
+.reduce-motion.seq-file [data-object="decree"] {
+  animation: sheet-arrive var(--seq-ms) ease-out reverse forwards;
+}
+.reduce-motion.seq-delivery :is([data-object="newspaper"], [data-object="letters"], [data-object="result"]) {
+  animation: sheet-arrive var(--seq-ms) ease-out both;
+}
+.reduce-motion .town-seal {
+  animation: sheet-arrive 300ms ease-out both;
+}
+.reduce-motion .lamp .lamp-glow,
+.reduce-motion.desk::after {
+  transition-duration: 300ms;
+}
+
+/* ---------- 窓の光（§3.4・§4.5-3）：右上から差す平行光。季節と天気で色が変わる ---------- */
+.window-light {
+  position: absolute;
+  inset: 0;
+  z-index: 31;
+  pointer-events: none;
+  mix-blend-mode: soft-light;
+  background: radial-gradient(ellipse 60% 55% at 96% 4%, var(--window-color) 0%, transparent 70%);
+  opacity: var(--window-strength);
+  transition:
+    opacity 400ms ease,
+    --window-color 400ms ease;
+}
+@property --window-color {
+  syntax: "<color>";
+  inherits: false;
+  initial-value: #f4e3b8;
+}
+.window-light[data-season="spring"] {
+  --window-color: #f6e7c4;
+  --window-strength: 0.75;
+}
+.window-light[data-season="summer"] {
+  --window-color: #fff3cf;
+  --window-strength: 0.95;
+}
+.window-light[data-season="autumn"] {
+  --window-color: #f2c48a;
+  --window-strength: 0.8;
+}
+.window-light[data-season="winter"] {
+  --window-color: #dfe6ec;
+  --window-strength: 0.6;
+}
+.window-light[data-sky="rain"] {
+  --window-color: #a9b4bd;
+  --window-strength: 0.55;
+}
+/* 雨の年：雨筋の影がゆっくり流れる（環境の微動）。
+   窓の光は机全体に soft-light で重ねているので、毎フレーム動かすと全面の合成やり直しで 10fps まで落ちる（U4 計測）。
+   1.2 秒に1度ずらすだけにする */
+.window-light-rain {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  background: repeating-linear-gradient(100deg, transparent 0 22px, rgb(40 50 60 / 10%) 22px 24px);
+  transition: opacity 400ms ease;
+}
+.window-light[data-sky="rain"] .window-light-rain {
+  opacity: 1;
+  animation: rain-drift 9.6s steps(8, end) infinite;
+}
+@keyframes rain-drift {
+  to {
+    background-position: 0 120px;
+  }
+}
+.mode-flat .window-light {
+  position: fixed;
+  z-index: 1;
+}
+/* ランプの炎のわずかな揺らぎ（環境の微動）。
+   毎フレーム変わる滑らかな変化にすると、立体の机全体を毎フレーム描き直すことになり 60fps → 17fps まで落ちた（U4 計測）。
+   段で切り替え（steps）、明るさの差も小さくして、描き直しを数百ミリ秒に1回にとどめる */
+@keyframes lamp-flicker {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  21% {
+    opacity: 0.95;
+  }
+  37% {
+    opacity: 0.98;
+  }
+  52% {
+    opacity: 0.93;
+  }
+  78% {
+    opacity: 0.97;
+  }
+}
+.lamp:not(.is-out) .lamp-glow {
+  animation: lamp-flicker 3.2s steps(1, end) infinite;
+}
+/* 性能の自動調整・動きを減らす：環境の微動（炎の揺らぎ・雨筋・窓の光の重ね）を止める（§9） */
+.low-power .lamp .lamp-glow,
+.reduce-motion .lamp .lamp-glow,
+.low-power .window-light-rain,
+.reduce-motion .window-light-rain {
+  animation: none;
+}
+.low-power .window-light {
+  display: none;
+}
+
+/* ---------- 並べ読み（§4.6）：地名・建物の名に点線の下線。かざすと朱の点線になり、地図の区画が示される ---------- */
+.map-ref {
+  text-decoration: underline dotted rgb(43 29 14 / 45%);
+  text-decoration-thickness: 1.5px;
+  text-underline-offset: 3px;
+  cursor: help;
+}
+.map-ref:hover {
+  text-decoration: underline double var(--vermilion);
+  background: rgb(166 58 46 / 10%);
+}
+
+/* 設定：音量の3つのつまみ */
+.settings-volumes {
+  display: grid;
+  gap: 6px;
+}
+.settings-volume {
+  display: grid;
+  grid-template-columns: 5em 1fr 2.5em;
+  align-items: center;
+  gap: 8px;
+}
+.settings-volume-value {
+  font-family: var(--sans);
+  font-size: 12px;
+  text-align: right;
+}
+
+/* 性能の自動調整：影も軽くする（drop-shadow の filter は合成が重いので、静的な box-shadow 1枚に置き換える） */
+.low-power .desk-object.shadow-drop.is-companion {
+  filter: none;
+}
+.low-power .desk-object.shadow-box.is-focused,
+.low-power .desk-object.shadow-box.is-companion {
+  box-shadow: 0 10px 24px rgb(0 0 0 / 45%);
+}
