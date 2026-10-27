@@ -2,8 +2,8 @@ import { NOTE_CHAR_LIMIT } from "../../domain/constants";
 import { noteLength, type NoteAttachment, type PlayerNote, type PlayerNotes } from "../../domain/PlayerNotes";
 import { messages } from "../../i18n/messages";
 
-// メモ帳と鉛筆（SPEC_v3.3 §7）。1枚 NOTE_CHAR_LIMIT 字まで書き、ちぎって新聞の記事・側近書簡に留める（地図の区画は U3）。
-// 留め先は今年の新聞の記事と書簡から選ぶ。ちぎったメモは下に並び、留め先を替えられる。
+// メモ帳と鉛筆（SPEC_v3.3 §7）。1枚 NOTE_CHAR_LIMIT 字まで書き、ちぎって新聞の記事・側近書簡・地図の区画に留める。
+// 留め先は今年の新聞の記事と書簡、地図で選んでいる区画から選ぶ。ちぎったメモは下に並び、留め先を替えられる。
 // メモは LLM にも新聞にも渡さない（ゲームの状態とは別に保存するだけ）。入力欄は手元でだけ出す（不変条件25）。
 
 const t = messages.ui.notes;
@@ -18,7 +18,13 @@ export interface NoteTarget {
 export const NO_TARGET: NoteTarget = { key: "none", label: t.noTarget, attachment: null };
 
 export const targetKeyOf = (a: NoteAttachment | null): string =>
-  a === null ? "none" : a.kind === "article" ? `article:${a.turn}:${a.articleId}` : `aide:${a.turn}:${a.aideId}`;
+  a === null
+    ? "none"
+    : a.kind === "parcel"
+      ? `parcel:${a.gridIndex}`
+      : a.kind === "article"
+        ? `article:${a.turn}:${a.articleId}`
+        : `aide:${a.turn}:${a.aideId}`;
 
 export interface NoteDraft {
   readonly text: string;

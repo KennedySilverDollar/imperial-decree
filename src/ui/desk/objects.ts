@@ -30,8 +30,8 @@ export interface DeskObjectSpec {
 export const DESK_OBJECTS: Readonly<Record<DeskObjectId, DeskObjectSpec>> = {
   lamp: { id: "lamp", width: 200, home: { x: -1130, y: -720, z: 40, rotate: 0 }, shadow: "drop" },
   ledger: { id: "ledger", width: 680, home: { x: -640, y: -690, z: 6, rotate: -2.5 }, shadow: "box" },
-  map: { id: "map", width: 470, home: { x: 90, y: -700, z: 2, rotate: 0.6 }, shadow: "box" },
-  letters: { id: "letters", width: 600, home: { x: 760, y: -680, z: 5, rotate: 2.2 }, shadow: "box" },
+  map: { id: "map", width: 680, home: { x: 90, y: -720, z: 2, rotate: 0.6 }, shadow: "box", overviewMaxHeight: 760 },
+  letters: { id: "letters", width: 600, home: { x: 790, y: -680, z: 5, rotate: 2.2 }, shadow: "box" },
   notepad: { id: "notepad", width: 380, home: { x: 1000, y: -250, z: 6, rotate: 4 }, shadow: "box", overviewMaxHeight: 340 },
   archive: { id: "archive", width: 760, home: { x: 560, y: 470, z: 26, rotate: -1 }, shadow: "box", overviewMaxHeight: 260 },
   newspaper: { id: "newspaper", width: 720, home: { x: -700, y: -50, z: 4, rotate: -4 }, shadow: "box", overviewMaxHeight: 470 },

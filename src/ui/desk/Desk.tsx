@@ -11,6 +11,7 @@ import { AidePanel } from "../panels/AidePanel";
 import { DecreePanel } from "../panels/DecreePanel";
 import { EndingScreen } from "../panels/EndingScreen";
 import { LedgerPanel } from "../panels/LedgerPanel";
+import { gazetteerFor } from "../../engine/Gazetteer";
 import { MapPanel } from "../panels/MapPanel";
 import { ArchivePanel } from "../panels/ArchivePanel";
 import { NewspaperPanel, newspaperPages } from "../panels/NewspaperPanel";
@@ -56,14 +57,16 @@ interface Props {
   readonly adaptive: boolean;
   /** メモの保存先（ゲームのセーブとは別のキー。DECISIONS AA-11） */
   readonly notesStorage: NotesStorage | null;
+  /** 測量の遅れ（SPEC_v3.3 §5.9。既定は無効の実験フラグ） */
+  readonly surveyDelay: boolean;
 }
 
 /** 新聞の面の数（第一面と二面） */
 const newspaperPageCount = (record: TurnRecord): number => newspaperPages(record.newspaper.articles.map((a) => ({ sectionId: a.section }))).length;
 
-const attachmentKind = (a: NoteAttachment | null): "none" | "article" | "aideReport" => (a === null ? "none" : a.kind);
+const attachmentKind = (a: NoteAttachment | null): "none" | "article" | "aideReport" | "parcel" => (a === null ? "none" : a.kind);
 
-export function Desk({ session, settings, onSettings, systemReducedMotion, fpsFromQuery, adaptive, notesStorage }: Props) {
+export function Desk({ session, settings, onSettings, systemReducedMotion, fpsFromQuery, adaptive, notesStorage, surveyDelay }: Props) {
   const { game, phase, lastRecord, map, candidates, error, actions } = session;
   const [desk, dispatch] = useReducer(deskReducer, "", initialDeskState);
   const [settingsOpen, setSettingsOpen] = useState(false);
@@ -265,10 +268,16 @@ export function Desk({ session, settings, onSettings, systemReducedMotion, fpsFr
     notes === null ? [] : notesAttachedTo(notes, { kind: "article", turn, articleId });
   const letterNotes = (turn: number, aideId: string): readonly PlayerNote[] =>
     notes === null ? [] : notesAttachedTo(notes, { kind: "aideReport", turn, aideId });
+  const selectedParcel: NoteAttachment | null = desk.mapSelection === null ? null : { kind: "parcel", gridIndex: desk.mapSelection };
+  const parcelTargets: readonly NoteTarget[] =
+    selectedParcel === null
+      ? []
+      : [{ key: targetKeyOf(selectedParcel), label: ui.notes.parcelPlace(gazetteerFor(game.saveId).parcels[desk.mapSelection ?? 0] ?? ""), attachment: selectedParcel }];
   const noteTargets: readonly NoteTarget[] =
     lastRecord === null
-      ? []
+      ? parcelTargets
       : [
+          ...parcelTargets,
           ...lastRecord.newspaper.articles.map((a) => {
             const attachment: NoteAttachment = { kind: "article", turn: lastRecord.newspaper.turn, articleId: a.id };
             return { key: targetKeyOf(attachment), label: ui.notes.articlePlace(attachment.turn, a.headline), attachment };
@@ -280,6 +289,7 @@ export function Desk({ session, settings, onSettings, systemReducedMotion, fpsFr
         ];
   const placeOf = (a: NoteAttachment | null): string => {
     if (a === null) return ui.notes.loose;
+    if (a.kind === "parcel") return ui.notes.parcelPlace(gazetteerFor(game.saveId).parcels[a.gridIndex] ?? "");
     const record = game.history.find((r) => r.turn === a.turn);
     if (a.kind === "aideReport") return ui.notes.letterPlace(a.turn, aideName(a.aideId));
     const article = record?.newspaper.articles.find((x) => x.id === a.articleId);
@@ -315,8 +325,14 @@ export function Desk({ session, settings, onSettings, systemReducedMotion, fpsFr
       case "map":
         return (
           <MapPanel
-            map={map}
-            works={game.projects.map((p) => ({ id: p.id, building: p.kind, count: p.count, repair: p.repair, orderedTurn: p.orderedTurn }))}
+            game={game}
+            notes={notes}
+            live={interactive}
+            interactive={interactive}
+            selected={desk.mapSelection}
+            onSelect={(gridIndex) => dispatch({ type: "selectParcel", gridIndex })}
+            onPin={(text, gridIndex) => tearNote(text, { kind: "parcel", gridIndex })}
+            surveyDelay={surveyDelay}
           />
         );
       case "letters":

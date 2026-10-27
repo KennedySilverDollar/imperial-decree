@@ -30,10 +30,9 @@ describe("20 種の enum（建物17＋政策3）", () => {
     }
   });
 
-  it("全 target に表示名、全建物に地図記号と表の定義がある", () => {
+  it("全 target に表示名、全建物に表の定義がある（地図記号は ui/map/survey.test.ts）", () => {
     for (const target of TARGETS) expect(messages.targets[target]).toBeTruthy();
     for (const id of BUILDING_IDS) {
-      expect(messages.tileGlyphs[id]).toHaveLength(1);
       expect(BUILDINGS[id].id).toBe(id);
       expect(BUILDINGS[id].recipe.minTurns).toBeGreaterThanOrEqual(1);
     }

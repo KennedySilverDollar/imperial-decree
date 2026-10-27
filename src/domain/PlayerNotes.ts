@@ -1,11 +1,12 @@
-import { NOTE_CHAR_LIMIT, NOTES_SCHEMA_VERSION } from "./constants";
+import { GRID_SIZE, NOTE_CHAR_LIMIT, NOTES_SCHEMA_VERSION } from "./constants";
 
 // プレイヤーのメモ（SPEC_v3.3 §7・§11.1）。ゲームのロジックには一切影響しない。
 // GameState とは別に保存し（DECISIONS AA-11）、参謀（LLM）にも新聞にも渡さない。
 // domain は Effect 非依存のため、SPEC の Option の代わりに null を使う（I-01）。
 
-/** 留め先。地図の区画（parcel）は U3 で足す */
+/** 留め先：地図の区画・新聞の記事・側近の書簡 */
 export type NoteAttachment =
+  | { readonly kind: "parcel"; readonly gridIndex: number }
   | { readonly kind: "article"; readonly turn: number; readonly articleId: string }
   | { readonly kind: "aideReport"; readonly turn: number; readonly aideId: string };
 
@@ -39,6 +40,7 @@ export const validateNoteText = (text: string): NoteIssue | null => {
 
 export const sameAttachment = (a: NoteAttachment | null, b: NoteAttachment | null): boolean => {
   if (a === null || b === null) return a === b;
+  if (a.kind === "parcel" && b.kind === "parcel") return a.gridIndex === b.gridIndex;
   if (a.kind === "article" && b.kind === "article") return a.turn === b.turn && a.articleId === b.articleId;
   if (a.kind === "aideReport" && b.kind === "aideReport") return a.turn === b.turn && a.aideId === b.aideId;
   return false;
@@ -68,6 +70,10 @@ const isRecord = (v: unknown): v is Record<string, unknown> => typeof v === "obj
 
 const parseAttachment = (raw: unknown): NoteAttachment | null | undefined => {
   if (raw === null) return null;
+  if (isRecord(raw) && raw.kind === "parcel") {
+    const g = raw.gridIndex;
+    return typeof g === "number" && Number.isInteger(g) && g >= 0 && g < GRID_SIZE * GRID_SIZE ? { kind: "parcel", gridIndex: g } : undefined;
+  }
   if (!isRecord(raw) || typeof raw.turn !== "number" || !Number.isInteger(raw.turn)) return undefined;
   if (raw.kind === "article" && typeof raw.articleId === "string") return { kind: "article", turn: raw.turn, articleId: raw.articleId };
   if (raw.kind === "aideReport" && typeof raw.aideId === "string") return { kind: "aideReport", turn: raw.turn, aideId: raw.aideId };

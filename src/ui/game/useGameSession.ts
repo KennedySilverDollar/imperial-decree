@@ -47,7 +47,7 @@ export interface GameSession {
     /** 書類を手に取って置いた（手元にあった時間） */
     readonly logHandled: (object: string, mode: "3d" | "flat", dwellMs: number) => void;
     readonly logLetterOpened: (aideId: string) => void;
-    readonly logNote: (event: "note.created" | "note.attached", chars: number, attachedTo: "none" | "article" | "aideReport") => void;
+    readonly logNote: (event: "note.created" | "note.attached", chars: number, attachedTo: "none" | "article" | "aideReport" | "parcel") => void;
     readonly exportLog: () => string;
   };
 }

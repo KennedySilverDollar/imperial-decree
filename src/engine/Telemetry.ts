@@ -75,7 +75,7 @@ export type KpiEvent =
   | {
       /** メモをちぎった・留め先を変えた（SPEC_v3.3 §7・§13.2：作成数と留め先の分布） */
       readonly event: "note.created" | "note.attached";
-      readonly data: { readonly gameId: string; readonly turn: number; readonly chars: number; readonly attachedTo: "none" | "article" | "aideReport" };
+      readonly data: { readonly gameId: string; readonly turn: number; readonly chars: number; readonly attachedTo: "none" | "article" | "aideReport" | "parcel" };
     }
   | {
       readonly event: "newspaper.letters";
