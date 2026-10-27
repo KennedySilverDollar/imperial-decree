@@ -40,7 +40,9 @@
 | 測量図の装飾（図郭の二重線・表題・方位記号・縮尺・亀裂印・鉛筆の書き込み） | Canvas 2D の線と文字（書体は上表のしっぽり明朝 B1・Klee One・Noto Serif JP） | `src/ui/map/SurveyRenderer.ts` |
 | 結果の束の綴じ紐・訂正線と「訂」の印・意図の○／× | CSS（枠線・疑似要素） | `src/ui/desk/desk.css` |
 | 封書と封蝋・新聞の折り目・台帳の見開きと鉛筆の折れ線・メモの破り目・既決箱の木枠 | CSS のグラデーション・`clip-path`・影、折れ線は SVG の `polyline` | `src/ui/desk/desk.css`, `src/ui/panels/LedgerPanel.tsx` |
+| 効果音 11 種（書類を手に取る・置く、新聞を広げる・めくる、封蝋を割る、筆記、付箋、判子、地図のペン先、配達の足音・書類が置かれる音）と環境音 3 種（ランプ・雨・風） | **音源ファイルを使わず、Web Audio API でその場で合成**（seed 付きの白色雑音を帯域フィルタで絞った音と、音程が下がる正弦波・三角波の組み合わせ、包絡は指数減衰）。作り方の数値は `soundRecipes.ts` のデータ。SPEC_v3.3 §8.1 の一覧と1対1（各レシピに場面名を書いてある） | `src/ui/audio/soundRecipes.ts`, `src/ui/audio/AudioService.ts` |
+| ターン遷移の演出（既決箱へ・窓の光・配達・台帳の書き込み）、ランプの消灯、町の印章、地図のインクの描き込み（輪郭→記号、失われた建物の二重線） | CSS の `@keyframes`・個別の `translate`/`scale`・`mix-blend-mode`、地図は Canvas 2D の線の伸び（破線の長さで描きかけを表す） | `src/ui/desk/desk.css`, `src/ui/desk/WindowLight.tsx`, `src/ui/map/SurveyRenderer.ts` |
 
 ## 未使用（P0 では入れない）
-- 効果音（判子・紙めくり）：SPEC §12.8 でプロトは不要。入れる場合は CC0（freesound 等）か自作とし、ここに出典を書く。
+- 効果音の録音素材：U4 では上表のとおり合成（自作）で足りた。録音素材に差し替える場合は CC0（freesound 等）に限り、ここに出典を書く。
 - 木目・紙の画像テクスチャ：CSS で足りているため不使用。入れる場合は CC0（ambientCG 等）。
