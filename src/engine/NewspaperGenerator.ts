@@ -45,6 +45,7 @@ import {
 } from "../domain/News";
 import { hashString } from "../domain/Prng";
 import { aideName, messages } from "../i18n/messages";
+import { newspaperPlaces } from "./Gazetteer";
 import { makeRng, random, Rng } from "../services/Rng";
 import { VALIDATED_TEMPLATES as TEMPLATES } from "./NewspaperTemplates";
 
@@ -303,7 +304,7 @@ const render = (
       truth -= TRUTH_PENALTY_EUPHEMISM;
     }
     if (praised) truth -= TRUTH_PENALTY_PRAISE;
-    if (t.slots.includes("place")) values.place = yield* pickFrom(VOCABULARY.places);
+    if (t.slots.includes("place")) values.place = yield* pickFrom(newspaperPlaces(c.saveId));
     if (t.slots.includes("season")) values.season = issue.season;
     if (t.slots.includes("faction")) values.faction = yield* pickFrom(VOCABULARY.factions);
     if (t.slots.includes("building")) {
