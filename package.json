@@ -10,7 +10,8 @@
     "test": "vitest run",
     "typecheck": "tsc -b --noEmit",
     "lint": "eslint .",
-    "sim": "tsx scripts/sim.ts"
+    "sim": "tsx scripts/sim.ts",
+    "terrain:check": "tsx scripts/terrain-check.ts"
   },
   "dependencies": {
     "@fontsource/klee-one": "^5.3.1",
