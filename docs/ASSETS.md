@@ -20,6 +20,12 @@
 
 ライセンス本文は `node_modules/@fontsource/<書体>/LICENSE`（noto-serif-jp・noto-sans-jp・shippori-mincho-b1・klee-one・yuji-syuku）に含まれる。配布物に同梱するときは LICENSE を添える。
 
+### プログラムの依存（素材ではないが、地形の生成に使うもの）
+
+| 名称 | 用途 | 入手元 | バージョン | ライセンス |
+|------|------|--------|------------|------------|
+| simplex-noise | 測量図の地形の seed 付きノイズ（fBm・ドメインワーピング・森・水彩のむら）。乱数は自前の seed 付き系列を渡す（Math.random は使わない） | npm `simplex-noise` | 4.0.3 | MIT |
+
 ## 自作（外部素材なし）
 
 | 表現 | 作り方 | ファイル |
@@ -29,6 +35,9 @@
 | 判子・押印 | CSS（円形ボタン＋枠線の印影、transition） | `src/ui/styles.css`（`.seal-button`, `.seal-imprint`） |
 | 地図のタイル（住宅・道路・役所・市場・亀裂） | Phaser の Graphics で図形を描画 | `src/ui/scenes/MapScene.ts` |
 | 付箋・墨の濃淡・朱の残り字数・押印の動き（持ち上げ→朱肉→押印） | CSS（背景色・`@keyframes`）と、文字の位置から決まる濃さ（`ink.ts`） | `src/ui/desk/desk.css`, `src/ui/desk/ink.ts` |
+| 測量図の地形（標高・川・沼・森・地味）と、紙・水彩・陰影・等高線・樹木記号 | 手続き的生成（`simplex-noise` の seed 付きノイズ）と Canvas 2D の描画。画像素材は使わない（SPEC_v3.3 §10.2「地形の表現：素材不要」） | `src/ui/map/TerrainGenerator.ts`, `src/ui/map/BaseRenderer.ts` |
+| 建物の絵記号 17 種（住宅・長屋・屋敷・道路・井戸・倉庫・市場・農地・工房・役所・徴税所・裁判所・診療所・学校・寺院・見張り塔・牢屋） | 自作の SVG パス（32×32、線のみ、線幅 2、端と角は丸）。官製の地図記号に倣い、役所は二重丸、徴税所は算盤玉、裁判所は高札、学校は「文」、畑は双葉、工房は歯車。寺院は二層の屋根（卍は海外で誤読されるため使わない）。地図（Path2D）と凡例（`<svg>`）で同じデータを使う | `src/ui/map/pictograms.ts` |
+| 測量図の装飾（図郭の二重線・表題・方位記号・縮尺・亀裂印・鉛筆の書き込み） | Canvas 2D の線と文字（書体は上表のしっぽり明朝 B1・Klee One・Noto Serif JP） | `src/ui/map/SurveyRenderer.ts` |
 | 結果の束の綴じ紐・訂正線と「訂」の印・意図の○／× | CSS（枠線・疑似要素） | `src/ui/desk/desk.css` |
 | 封書と封蝋・新聞の折り目・台帳の見開きと鉛筆の折れ線・メモの破り目・既決箱の木枠 | CSS のグラデーション・`clip-path`・影、折れ線は SVG の `polyline` | `src/ui/desk/desk.css`, `src/ui/panels/LedgerPanel.tsx` |
 
