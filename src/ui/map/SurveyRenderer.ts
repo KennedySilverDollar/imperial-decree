@@ -1,4 +1,4 @@
-import { BUILDINGS } from "../../domain/Buildings";
+import { BUILDINGS, type BuildingId } from "../../domain/Buildings";
 import type { Gazetteer } from "../../engine/Gazetteer";
 import { messages } from "../../i18n/messages";
 import { boundsOf, centroid, pointInPolygon, type Point } from "./geometry2d";
@@ -86,10 +86,10 @@ const hatch = (ctx: Ctx2D, polygon: readonly Point[], angle: number, spacing: nu
 };
 
 /** レイヤ 7：区画（破線の境界）、畑は縞、普請中は斜めの細線 */
-const paintParcels = (ctx: Ctx2D, terrain: TerrainData, model: SurveyModel, graph: RoadGraph) => {
+const paintParcels = (ctx: Ctx2D, terrain: TerrainData, model: SurveyModel, graph: RoadGraph, omitFresh: boolean) => {
   for (const view of model.parcels) {
     const parcel = terrain.parcels[view.gridIndex];
-    if (!parcel) continue;
+    if (!parcel || (omitFresh && view.fresh)) continue;
     const isFarm = view.kind === "building" && view.building === "farm";
     if (!isFarm && view.kind !== "construction") continue;
     ctx.save();
@@ -128,6 +128,8 @@ const paintParcels = (ctx: Ctx2D, terrain: TerrainData, model: SurveyModel, grap
   ctx.setLineDash([7, 6]);
   ctx.stroke(edges);
   ctx.restore();
+  // 直近の1年に描き込んだ区画は、輪郭を新しい濃いインクの実線で（§5.7）
+  if (!omitFresh) for (const view of model.parcels) if (view.fresh) strokeOutline(ctx, terrain, view.gridIndex, 1);
   // 村域の外周は実線
   ctx.save();
   trace(ctx, villageOutline(terrain.parcels), true);
@@ -139,9 +141,11 @@ const paintParcels = (ctx: Ctx2D, terrain: TerrainData, model: SurveyModel, grap
 };
 
 /** レイヤ 8：道路の二重線。古い道を先に、直近の1年に伸びた道を新しいインクで */
-const paintRoads = (ctx: Ctx2D, network: RoadNetwork, model: SurveyModel) => {
+const isFreshRoad = (network: RoadNetwork, model: SurveyModel, i: number) => (network.pathTiles[i] ?? 0) >= model.freshRoadsFrom;
+
+const paintRoads = (ctx: Ctx2D, network: RoadNetwork, model: SurveyModel, omitFresh: boolean) => {
   const layers = [false, true].map((fresh) =>
-    network.pathCurves.filter((_, i) => ((network.pathTiles[i] ?? 0) >= model.freshRoadsFrom) === fresh),
+    fresh && omitFresh ? [] : network.pathCurves.filter((_, i) => isFreshRoad(network, model, i) === fresh),
   );
   ctx.save();
   ctx.lineCap = "round";
@@ -184,10 +188,10 @@ const paintCrack = (ctx: Ctx2D, x: number, y: number) => {
 };
 
 /** レイヤ 9：建物の絵記号（＋亀裂印と鉛筆の注記、未測の印） */
-const paintBuildings = (ctx: Ctx2D, terrain: TerrainData, model: SurveyModel) => {
+const paintBuildings = (ctx: Ctx2D, terrain: TerrainData, model: SurveyModel, omitFresh: boolean) => {
   for (const view of model.parcels) {
     const parcel = terrain.parcels[view.gridIndex];
-    if (!parcel || view.building === null || view.kind === "road" || view.kind === "empty") continue;
+    if (!parcel || view.building === null || view.kind === "road" || view.kind === "empty" || (omitFresh && view.fresh)) continue;
     const { x, y } = parcel.center;
     const farm = view.building === "farm";
     const size = farm ? CELL * 0.4 : CELL * 0.56;
@@ -418,29 +422,173 @@ const paintNotes = (ctx: Ctx2D, terrain: TerrainData, model: SurveyModel) => {
   }
 };
 
+/** 失われた建物（前に描いた年にはあり、今は無い区画）。記号の上に二重線を引いて消す（§5.7。消しゴムでは消さない） */
+export interface LostMark {
+  readonly gridIndex: number;
+  readonly building: BuildingId;
+  /** 直近の1年に失われた（新しいインクで、描き込みの段で線を引く） */
+  readonly fresh: boolean;
+}
+
 export interface SurveyArt {
   readonly base: CanvasImageSource;
   readonly terrain: TerrainData;
   readonly model: SurveyModel;
   readonly gazetteer: Gazetteer;
+  readonly lost?: readonly LostMark[];
 }
 
-/** 測量図の全レイヤを描く（ctx は MAP_PX 四方） */
-export const renderSurvey = (ctx: Ctx2D, art: SurveyArt): void => {
+/** 区画の輪郭を新しいインクで引く（progress は線を引き終えた割合） */
+const strokeOutline = (ctx: Ctx2D, terrain: TerrainData, gridIndex: number, progress: number) => {
+  const parcel = terrain.parcels[gridIndex];
+  if (!parcel || progress <= 0) return;
+  const poly = parcel.polygon;
+  let length = 0;
+  for (let i = 0; i < poly.length; i++) {
+    const a = poly[i] as Point;
+    const b = poly[(i + 1) % poly.length] as Point;
+    length += Math.hypot(b.x - a.x, b.y - a.y);
+  }
+  ctx.save();
+  trace(ctx, poly, true);
+  ctx.strokeStyle = SURVEY.newInk;
+  ctx.globalAlpha = 0.8;
+  ctx.lineWidth = 2.4;
+  ctx.lineJoin = "round";
+  if (progress < 1) ctx.setLineDash([length * progress, length]);
+  ctx.stroke();
+  ctx.restore();
+};
+
+/** 折れ線の先頭から、長さの割合 progress までの部分 */
+export const partialPolyline = (line: readonly Point[], progress: number): Point[] => {
+  if (progress >= 1) return [...line];
+  let total = 0;
+  for (let i = 1; i < line.length; i++) total += Math.hypot((line[i] as Point).x - (line[i - 1] as Point).x, (line[i] as Point).y - (line[i - 1] as Point).y);
+  let left = total * Math.max(0, progress);
+  const out: Point[] = line.length > 0 ? [line[0] as Point] : [];
+  for (let i = 1; i < line.length && left > 0; i++) {
+    const a = line[i - 1] as Point;
+    const b = line[i] as Point;
+    const seg = Math.hypot(b.x - a.x, b.y - a.y);
+    if (seg <= left) {
+      out.push(b);
+      left -= seg;
+    } else {
+      out.push({ x: a.x + ((b.x - a.x) * left) / seg, y: a.y + ((b.y - a.y) * left) / seg });
+      left = 0;
+    }
+  }
+  return out;
+};
+
+/** 失われた建物：古い記号の上に二重線（progress で線が伸びる） */
+const paintLost = (ctx: Ctx2D, terrain: TerrainData, marks: readonly LostMark[], progress: number) => {
+  for (const mark of marks) {
+    const parcel = terrain.parcels[mark.gridIndex];
+    if (!parcel) continue;
+    const { x, y } = parcel.center;
+    const size = CELL * 0.56;
+    drawPictogram(ctx, mark.building, x, y, size, SURVEY.oldInk, 0.75);
+    ctx.save();
+    ctx.strokeStyle = mark.fresh ? SURVEY.newInk : SURVEY.oldInk;
+    ctx.lineWidth = 2.6;
+    ctx.lineCap = "round";
+    const reach = size * 0.62 * Math.min(1, Math.max(0, progress));
+    for (const offset of [-5, 5]) {
+      ctx.beginPath();
+      ctx.moveTo(x - size * 0.62, y + offset - size * 0.2);
+      ctx.lineTo(x - size * 0.62 + reach * 2, y + offset - size * 0.2 + (reach * 2 * 0.4) / 1.24);
+      ctx.stroke();
+    }
+    ctx.restore();
+  }
+};
+
+export interface RenderOptions {
+  /** 直近の1年の描き込みを抜いて描く（描き込みの演出の下地） */
+  readonly omitFresh?: boolean;
+}
+
+/** 測量図の全レイヤを描く（ctx は MAP_PX 四方。縮めて描くときは呼ぶ側で ctx を縮める） */
+export const renderSurvey = (ctx: Ctx2D, art: SurveyArt, options: RenderOptions = {}): void => {
   const { terrain, model, gazetteer } = art;
+  const omitFresh = options.omitFresh ?? false;
   const network = roadNetworkFor(terrain, model.roads);
   const graph = graphs.get(terrain) as RoadGraph;
+  const lost = (art.lost ?? []).filter((m) => model.parcels[m.gridIndex]?.kind === "empty");
   ctx.save();
   ctx.clearRect(0, 0, MAP_PX, MAP_PX);
   ctx.drawImage(art.base, 0, 0, MAP_PX, MAP_PX);
-  paintParcels(ctx, terrain, model, graph);
-  paintRoads(ctx, network, model);
-  paintBuildings(ctx, terrain, model);
+  paintParcels(ctx, terrain, model, graph, omitFresh);
+  paintRoads(ctx, network, model, omitFresh);
+  paintBuildings(ctx, terrain, model, omitFresh);
+  paintLost(ctx, terrain, omitFresh ? lost.filter((m) => !m.fresh) : lost, 1);
   paintToponyms(ctx, terrain, gazetteer);
   paintDecorations(ctx, gazetteer, model);
   paintNotes(ctx, terrain, model);
   ctx.restore();
 };
+
+/**
+ * 描き込みの演出（§5.7）：直近の1年に変わった区画だけを、輪郭 → 記号の順に新しいインクで描く。道は線が伸び、
+ * 失われた建物には二重線が引かれる。renderSurvey(…, { omitFresh: true }) で描いた下地の上に、progress（0..1）まで重ねる。
+ */
+export const paintFresh = (ctx: Ctx2D, art: SurveyArt, progress: number): void => {
+  const { terrain, model } = art;
+  const network = roadNetworkFor(terrain, model.roads);
+  const outline = Math.min(1, progress / 0.45);
+  const symbol = Math.min(1, Math.max(0, (progress - 0.4) / 0.6));
+  ctx.save();
+  // 道：線が伸びる
+  ctx.lineCap = "round";
+  ctx.lineJoin = "round";
+  network.pathCurves.forEach((curve, i) => {
+    if (!isFreshRoad(network, model, i)) return;
+    const part = partialPolyline(curve, progress);
+    if (part.length < 2) return;
+    ctx.strokeStyle = SURVEY.newInk;
+    ctx.lineWidth = ROAD_WIDTH + ROAD_LINE * 2;
+    trace(ctx, part);
+    ctx.stroke();
+    ctx.strokeStyle = SURVEY.roadFill;
+    ctx.lineWidth = ROAD_WIDTH;
+    trace(ctx, part);
+    ctx.stroke();
+  });
+  ctx.restore();
+  for (const view of model.parcels) {
+    if (!view.fresh) continue;
+    const parcel = terrain.parcels[view.gridIndex];
+    if (!parcel) continue;
+    // 輪郭
+    strokeOutline(ctx, terrain, view.gridIndex, outline);
+    if (symbol <= 0 || view.building === null) continue;
+    // 中身：畑の縞・普請中の斜線は薄く現れ、記号は線を引く順に現れる
+    if (view.kind === "construction" || view.building === "farm") {
+      ctx.save();
+      trace(ctx, parcel.polygon, true);
+      ctx.clip();
+      hatch(ctx, parcel.polygon, view.building === "farm" ? ((view.gridIndex * 37) % 180) * (Math.PI / 180) : Math.PI / 4, view.building === "farm" ? 11 : 16);
+      ctx.strokeStyle = view.building === "farm" ? mixHex(SURVEY.fieldPoor, SURVEY.fieldRich, fertilityAt(terrain, parcel.center)) : SURVEY.newInk;
+      ctx.globalAlpha = (view.building === "farm" ? 0.75 : 0.28) * symbol;
+      ctx.lineWidth = view.building === "farm" ? 2 : 1.5;
+      ctx.stroke();
+      ctx.restore();
+    }
+    const farm = view.building === "farm";
+    const size = farm ? CELL * 0.4 : CELL * 0.56;
+    drawPictogram(ctx, view.building, parcel.center.x, parcel.center.y, size, SURVEY.newInk, view.kind === "construction" ? 0.55 : 1, symbol);
+  }
+  paintLost(ctx, terrain, (art.lost ?? []).filter((m) => m.fresh && model.parcels[m.gridIndex]?.kind === "empty"), progress);
+};
+
+/** 前に描いた年と比べて、失われた建物（建物があった区画が空き地になった） */
+export const lostBetween = (before: SurveyModel, after: SurveyModel): readonly LostMark[] =>
+  after.parcels.flatMap((view) => {
+    const prev = before.parcels[view.gridIndex];
+    return prev?.kind === "building" && prev.building !== null && view.kind === "empty" ? [{ gridIndex: view.gridIndex, building: prev.building, fresh: true }] : [];
+  });
 
 /** 区画の当たり判定（地図の画素の座標から区画の番号。村域の外は null） */
 export const parcelAt = (terrain: TerrainData, p: Point): number | null => {

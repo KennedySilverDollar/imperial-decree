@@ -55,8 +55,11 @@ export type Ctx2D = CanvasRenderingContext2D | OffscreenCanvasRenderingContext2D
 
 const cache = new Map<BuildingId, Path2D>();
 
-/** 地図に絵記号を描く（中心 (cx, cy)、一辺 size）。Path2D は使い回す */
-export const drawPictogram = (ctx: Ctx2D, id: BuildingId, cx: number, cy: number, size: number, color: string, alpha = 1): void => {
+/** 1つの記号の線の長さの上限（記号の枠の単位）。描き込みの途中（reveal < 1）は、この長さに対する割合だけ線を引く */
+const PICTOGRAM_PATH_MAX = 420;
+
+/** 地図に絵記号を描く（中心 (cx, cy)、一辺 size）。reveal は描き込みの進み（0..1、線を引く順に現れる）。Path2D は使い回す */
+export const drawPictogram = (ctx: Ctx2D, id: BuildingId, cx: number, cy: number, size: number, color: string, alpha = 1, reveal = 1): void => {
   let path = cache.get(id);
   if (!path) {
     path = new Path2D(PICTOGRAMS[id]);
@@ -71,6 +74,7 @@ export const drawPictogram = (ctx: Ctx2D, id: BuildingId, cx: number, cy: number
   ctx.lineWidth = PICTOGRAM_STROKE;
   ctx.lineCap = "round";
   ctx.lineJoin = "round";
+  if (reveal < 1) ctx.setLineDash([PICTOGRAM_PATH_MAX * Math.max(0, reveal), PICTOGRAM_PATH_MAX]);
   ctx.stroke(path);
   ctx.restore();
 };
