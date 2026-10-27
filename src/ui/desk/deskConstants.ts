@@ -20,6 +20,8 @@ export const HOVER_LIFT = 16;
 export const FOCUS_TRANSITION_MS = 350;
 /** 「動きを減らす」での置き換え（移動はせず、短いフェード。§8.2） */
 export const REDUCED_FADE_MS = 120;
+/** 押印の所作のうち、判が紙に当たる時点（desk.css の seal-press の 84%。打撃音を合わせる） */
+export const STAMP_HIT_AT = 0.84;
 /** 「動きを減らす」での押印の待ち時間（通常は domain/constants の STAMP_ANIMATION_MS） */
 export const REDUCED_STAMP_MS = 200;
 

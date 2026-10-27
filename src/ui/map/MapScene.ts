@@ -1,5 +1,5 @@
 import Phaser from "phaser";
-import type { Point } from "./geometry2d";
+import { hatchSegments, type Point } from "./geometry2d";
 import { MAP_PX, MAP_VIEW, MAP_ZOOM_LEVELS } from "./mapConstants";
 
 // 手元の測量図（SPEC_v3.3 §5.6）。描き終えた測量図（Canvas）をテクスチャとして貼り、カメラで拡大・移動するだけ。
@@ -18,6 +18,8 @@ export interface MapSceneEvents {
 }
 
 const TEXTURE = "survey";
+/** 並べ読みのしるしの朱（SPEC_v3.3 §3.5 の朱色） */
+const HIGHLIGHT_COLOR = 0xa63a2e;
 /** これ以上動いたら、押したのではなくドラッグ */
 const DRAG_SLOP = 6;
 
@@ -27,6 +29,8 @@ export class MapScene extends Phaser.Scene {
   private events_: MapSceneEvents | null = null;
   private level = 0;
   private dragDistance = 0;
+  private highlightLayer: Phaser.GameObjects.Graphics | null = null;
+  private highlighted: readonly (readonly Point[])[] = [];
 
   constructor() {
     super("MapScene");
@@ -80,6 +84,34 @@ export class MapScene extends Phaser.Scene {
     this.input.on("gameout", () => this.events_?.onHover(null, { x: 0, y: 0 }));
   }
 
+  /**
+   * 並べ読みのしるし（§4.6）：区画を朱でほのかに塗り、太い輪郭と斜線を重ねる（色だけに頼らない：不変条件24）。
+   * 空の配列で消す。create の前に渡されたものは create で描く
+   */
+  setHighlight(polygons: readonly (readonly Point[])[]): void {
+    this.highlighted = polygons;
+    const g = this.highlightLayer;
+    if (!g) return;
+    g.clear();
+    for (const polygon of polygons) {
+      if (polygon.length < 3) continue;
+      const outline = () => {
+        g.beginPath();
+        polygon.forEach((p, i) => (i === 0 ? g.moveTo(p.x, p.y) : g.lineTo(p.x, p.y)));
+        g.closePath();
+      };
+      g.fillStyle(HIGHLIGHT_COLOR, 0.14);
+      outline();
+      g.fillPath();
+      g.lineStyle(2, HIGHLIGHT_COLOR, 0.65);
+      for (const [a, b] of hatchSegments(polygon, 16, -Math.PI / 4)) g.lineBetween(a.x, a.y, b.x, b.y);
+      g.lineStyle(6, HIGHLIGHT_COLOR, 0.9);
+      outline();
+      g.strokePath();
+    }
+    this.events_?.onWake();
+  }
+
   /** 拡大の段（0..2）を変える。around は拡大の中心にする画面上の点（無ければ画面の中央） */
   setLevel(level: number, around: Point | null): void {
     if (!this.sys.isActive()) return;
@@ -115,6 +147,9 @@ export class MapScene extends Phaser.Scene {
     this.textures.addCanvas(TEXTURE, this.canvas);
     this.image?.destroy();
     this.image = this.add.image(0, 0, TEXTURE).setOrigin(0, 0);
+    this.highlightLayer?.destroy();
+    this.highlightLayer = this.add.graphics();
+    this.setHighlight(this.highlighted);
     this.events_?.onWake();
   }
 }

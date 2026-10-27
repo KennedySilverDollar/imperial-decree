@@ -7,14 +7,16 @@ import { noteLength, validateNoteText, type PlayerNotes } from "../../domain/Pla
 import { gazetteerFor } from "../../engine/Gazetteer";
 import { aideName, messages } from "../../i18n/messages";
 import type { Point } from "../map/geometry2d";
-import { MAP_SNAPSHOT, MAP_VIEW, MAP_ZOOM_LEVELS } from "../map/mapConstants";
+import { MAP_PX, MAP_SNAPSHOT, MAP_VIEW, MAP_ZOOM_LEVELS } from "../map/mapConstants";
 import { MapScene } from "../map/MapScene";
 import { drawSnapshot } from "../map/MapSnapshot";
 import { relatedToParcel } from "../map/parcelRecords";
 import { PICTOGRAM_BOX, PICTOGRAM_STROKE, PICTOGRAMS } from "../map/pictograms";
 import { buildSurveyModel, type ParcelView } from "../map/surveyModel";
-import { parcelAt } from "../map/SurveyRenderer";
+import { paintFresh, parcelAt } from "../map/SurveyRenderer";
 import { useSurvey } from "../map/useSurvey";
+import { gridCoordOf, zoneOf } from "../../domain/Landscape";
+import type { MapRef } from "../reading/mapRefs";
 import { FOCUS_TRANSITION_MS } from "../desk/deskConstants";
 
 // 領地の測量図（SPEC_v3.3 §5）。机に置いてあるときは測量図の静止画、手元（と平面モード）では Phaser のライブの地図。
@@ -51,12 +53,19 @@ interface Props {
   readonly onPin: (text: string, gridIndex: number) => void;
   /** 測量の遅れ（§5.9。既定は無効） */
   readonly surveyDelay: boolean;
+  /** ターン遷移の途中（§4.5）：「地図の更新」の段までは前の年のまま */
+  readonly hold?: boolean;
+  /** 「地図の更新」の段の長さ。この間、直近の1年の変化をインクで描き込んでいく（§5.7） */
+  readonly inkMs?: number | null;
+  /** 並べ読み（§4.6）：書類の中でかざしている地名・建物。該当区画を朱でほのかに示す */
+  readonly highlight?: MapRef | null;
 }
 
-export function MapPanel({ game, notes, live, interactive, selected, onSelect, onPin, surveyDelay }: Props) {
+export function MapPanel({ game, notes, live, interactive, selected, onSelect, onPin, surveyDelay, hold = false, inkMs = null, highlight = null }: Props) {
   const gazetteer = gazetteerFor(game.saveId);
   const model = useMemo(() => buildSurveyModel({ game, notes, surveyDelay }), [game, notes, surveyDelay]);
-  const survey = useSurvey(game.saveId, model, gazetteer);
+  const survey = useSurvey(game.saveId, model, gazetteer, hold);
+  const [inking, setInking] = useState(false);
   const frame = useRef<HTMLDivElement>(null);
   const host = useRef<HTMLDivElement>(null);
   const snapshot = useRef<HTMLCanvasElement>(null);
@@ -116,12 +125,42 @@ export function MapPanel({ game, notes, live, interactive, selected, onSelect, o
     [],
   );
 
-  // 描き直したら、ライブの地図のテクスチャと俯瞰の静止画を更新する
+  // 描き直したら、ライブの地図のテクスチャと俯瞰の静止画を更新する（描き込みの演出の間は演出が描く）
   useEffect(() => {
-    if (survey.canvas === null || survey.version === 0) return;
+    if (survey.canvas === null || survey.version === 0 || inking) return;
     scene.current?.refresh();
     if (snapshot.current) drawSnapshot(survey.canvas, snapshot.current, MAP_SNAPSHOT);
-  }, [survey.version, survey.canvas, live]);
+  }, [survey.version, survey.canvas, live, inking]);
+
+  // 描き込みの演出（§5.7）：直近の1年を抜いた下地の上に、変わった区画だけを輪郭 → 記号の順に描く。
+  // 手元・平面でライブの地図を出していても、この間は静止画の上で描く
+  const ink = survey.ink;
+  useEffect(() => {
+    if (inkMs === null || ink === null || !snapshot.current) return;
+    const target = snapshot.current;
+    const ctx = target.getContext("2d");
+    if (!ctx) return;
+    target.width = MAP_SNAPSHOT;
+    target.height = MAP_SNAPSHOT;
+    setInking(true);
+    const started = performance.now();
+    let frame = 0;
+    const draw = () => {
+      const progress = Math.min(1, (performance.now() - started) / Math.max(1, inkMs));
+      ctx.setTransform(1, 0, 0, 1, 0, 0);
+      ctx.drawImage(ink.base, 0, 0);
+      ctx.setTransform(MAP_SNAPSHOT / MAP_PX, 0, 0, MAP_SNAPSHOT / MAP_PX, 0, 0);
+      paintFresh(ctx, ink.art, progress);
+      ctx.setTransform(1, 0, 0, 1, 0, 0);
+      if (progress < 1) frame = requestAnimationFrame(draw);
+      else setInking(false);
+    };
+    frame = requestAnimationFrame(draw);
+    return () => {
+      cancelAnimationFrame(frame);
+      setInking(false);
+    };
+  }, [inkMs, ink]);
 
   // 隠していた地図を見せたら、大きさを測り直して1フレーム描く。手に取る動き（3D の変形）の途中で測ると
   // 縮んだ大きさになるので、動きが終わったあとにもう一度測る
@@ -139,6 +178,24 @@ export function MapPanel({ game, notes, live, interactive, selected, onSelect, o
     return () => window.clearTimeout(later);
   }, [live, survey.status]);
 
+  // 並べ読みのしるし：区域なら区域の区画、建物ならその建物（普請中も含む）のある区画
+  const highlighted = useMemo(() => {
+    if (highlight === null) return [];
+    return model.parcels
+      .filter((view) => {
+        if (highlight.kind === "building") return view.building === highlight.building && (view.kind === "building" || view.kind === "construction");
+        const [x, y] = gridCoordOf(view.gridIndex);
+        return zoneOf(x, y) === highlight.zone;
+      })
+      .map((view) => view.gridIndex);
+  }, [highlight, model]);
+  const highlightKey = highlighted.join(",");
+  useEffect(() => {
+    if (terrain === null) return;
+    scene.current?.setHighlight(highlighted.map((i) => terrain.parcels[i]?.polygon ?? []));
+    // highlightKey が同じなら描き直さない
+  }, [highlightKey, terrain]);
+
   const views = model.parcels;
   const selectedView = selected === null ? undefined : views[selected];
   const related = useMemo(
@@ -154,6 +211,7 @@ export function MapPanel({ game, notes, live, interactive, selected, onSelect, o
       <h2 className="panel-title">{messages.ui.panels.map}</h2>
       <div
         className={`map-canvas survey-frame is-${survey.status}`}
+        data-highlighted={highlighted.length > 0 ? highlighted.length : undefined}
         ref={frame}
         data-testid="map-canvas"
         data-survey={survey.status}
@@ -169,8 +227,8 @@ export function MapPanel({ game, notes, live, interactive, selected, onSelect, o
         {survey.status === "loading" && <p className="survey-placeholder">{t.surveying}</p>}
         {survey.status === "unavailable" && <p className="survey-placeholder">{t.unavailable}</p>}
         {/* 俯瞰：静止画。手元：ライブの地図（Phaser）。どちらも同じ測量図 */}
-        <canvas ref={snapshot} className="survey-snapshot" hidden={live || survey.status !== "ready"} aria-hidden />
-        <div ref={host} className="survey-live" hidden={!live || survey.status !== "ready"} onPointerEnter={remeasure} />
+        <canvas ref={snapshot} className="survey-snapshot" hidden={(live && !inking) || survey.status !== "ready"} aria-hidden data-inking={inking || undefined} />
+        <div ref={host} className="survey-live" hidden={!live || inking || survey.status !== "ready"} onPointerEnter={remeasure} />
         {live && survey.status === "ready" && (
           <div className="survey-zoom">
             <button className="button" disabled={zoom >= MAP_ZOOM_LEVELS.length - 1} onClick={() => scene.current?.setLevel(zoom + 1, null)}>

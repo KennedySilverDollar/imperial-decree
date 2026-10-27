@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useState } from "react";
+import { DEFAULT_VOLUMES, type Volumes } from "../audio/soundRecipes";
 import { TEXT_SCALES } from "../desk/deskConstants";
 
-// 設定（SPEC_v3.3 §9）：平面モード・動きを減らす・手元の文字サイズ・開発用の FPS 表示。
+// 設定（SPEC_v3.3 §8.1・§9）：平面モード・動きを減らす・手元の文字サイズ・音量（主音量／効果音／環境音）・開発用の FPS 表示。
 // 表現層が書き込めるのは PlayerNotes と設定だけ（不変条件17）。セーブとは別のキーに保存する。
 
 export type TextSize = keyof typeof TEXT_SCALES;
@@ -13,9 +14,13 @@ export interface Settings {
   readonly motion: MotionPreference;
   readonly textSize: TextSize;
   readonly showFps: boolean;
+  /** 音量（0..1）。既定は控えめ（§8.1） */
+  readonly volume: Volumes;
 }
 
-export const DEFAULT_SETTINGS: Settings = { flat: false, motion: "system", textSize: "normal", showFps: false };
+export const DEFAULT_SETTINGS: Settings = { flat: false, motion: "system", textSize: "normal", showFps: false, volume: DEFAULT_VOLUMES };
+
+const unit = (value: unknown, fallback: number): number => (typeof value === "number" && Number.isFinite(value) ? Math.min(1, Math.max(0, value)) : fallback);
 export const SETTINGS_STORAGE_KEY = "imperial-decree/settings";
 
 export const TEXT_SIZES: readonly TextSize[] = ["normal", "large", "xlarge"];
@@ -40,6 +45,10 @@ export const parseSettings = (raw: string | null): Settings => {
     motion: oneOf(p.motion, MOTION_PREFERENCES, DEFAULT_SETTINGS.motion),
     textSize: oneOf(p.textSize, TEXT_SIZES, DEFAULT_SETTINGS.textSize),
     showFps: typeof p.showFps === "boolean" ? p.showFps : DEFAULT_SETTINGS.showFps,
+    volume: (() => {
+      const v = typeof p.volume === "object" && p.volume !== null ? (p.volume as Record<string, unknown>) : {};
+      return { master: unit(v.master, DEFAULT_VOLUMES.master), sfx: unit(v.sfx, DEFAULT_VOLUMES.sfx), ambient: unit(v.ambient, DEFAULT_VOLUMES.ambient) };
+    })(),
   };
 };
 

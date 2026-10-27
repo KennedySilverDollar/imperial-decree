@@ -1,4 +1,6 @@
-import { useEffect, useReducer, useRef, useState, type CSSProperties, type ReactNode } from "react";
+import { useEffect, useMemo, useReducer, useRef, useState, type CSSProperties, type ReactNode } from "react";
+import { ZONES } from "../../domain/Landscape";
+import { MapRefContext, type MapRef } from "../reading/mapRefs";
 import { DECREE_POLITICAL_COST } from "../../domain/constants";
 import { addNote, attachNote, notesAttachedTo, noteLength, type NoteAttachment, type PlayerNote } from "../../domain/PlayerNotes";
 import type { TurnRecord } from "../../domain/TurnRecord";
@@ -30,6 +32,11 @@ import { motionTimings } from "./motion";
 import { DESK_OBJECT_IDS, type DeskObjectId, type PickableId } from "./objects";
 import { Lamp } from "./objects/Lamp";
 import { StampObject } from "./objects/StampObject";
+import { endingStyleOf, type EndingStyle } from "../transitions/TurnSequence";
+import { useTurnSequence } from "../transitions/useTurnSequence";
+import { AudioService } from "../audio/AudioService";
+import { STAMP_HIT_AT } from "./deskConstants";
+import { weatherOf, type Weather } from "../transitions/weather";
 
 // 執務机の全体（SPEC_v3.3 §3・§4・§9）。ゲームの状態は GameSession から読むだけで、
 // 机の UI 状態（手元・重なり・書きかけ・めくり位置）は deskReducer が持つ（GameState には入れない）。
@@ -59,6 +66,10 @@ interface Props {
   readonly notesStorage: NotesStorage | null;
   /** 測量の遅れ（SPEC_v3.3 §5.9。既定は無効の実験フラグ） */
   readonly surveyDelay: boolean;
+  /** 開発用：遷移の演出をゆっくりにする倍率（?seqscale） */
+  readonly sequenceScale?: number;
+  /** 音の係（テストで差し替える。無ければ机が作る） */
+  readonly audio?: AudioService;
 }
 
 /** 新聞の面の数（第一面と二面） */
@@ -66,7 +77,7 @@ const newspaperPageCount = (record: TurnRecord): number => newspaperPages(record
 
 const attachmentKind = (a: NoteAttachment | null): "none" | "article" | "aideReport" | "parcel" => (a === null ? "none" : a.kind);
 
-export function Desk({ session, settings, onSettings, systemReducedMotion, fpsFromQuery, adaptive, notesStorage, surveyDelay }: Props) {
+export function Desk({ session, settings, onSettings, systemReducedMotion, fpsFromQuery, adaptive, notesStorage, surveyDelay, sequenceScale = 1, audio }: Props) {
   const { game, phase, lastRecord, map, candidates, error, actions } = session;
   const [desk, dispatch] = useReducer(deskReducer, "", initialDeskState);
   const [settingsOpen, setSettingsOpen] = useState(false);
@@ -75,9 +86,31 @@ export function Desk({ session, settings, onSettings, systemReducedMotion, fpsFr
   const [instant, setInstant] = useState(false);
   const stage = useStageSize();
   const [notes, updateNotes] = usePlayerNotes(notesStorage, game?.saveId ?? null);
-  const stampTimer = useRef<number | null>(null);
-  const pendingStamp = useRef<(() => void) | null>(null);
   const transitionUntil = useRef(0);
+  /** 押印した年（結果が届いたかを、この年の記録で確かめる） */
+  const submittedTurn = useRef<number | null>(null);
+  // 音（§8.1）：最初のクリック・キーで鳴らせるようにし、設定の音量と、窓の天候の環境音を合わせる
+  const [sound] = useState(() => audio ?? new AudioService());
+  useEffect(() => {
+    const unlock = () => sound.unlock();
+    window.addEventListener("pointerdown", unlock);
+    window.addEventListener("keydown", unlock);
+    return () => {
+      window.removeEventListener("pointerdown", unlock);
+      window.removeEventListener("keydown", unlock);
+      if (audio === undefined) sound.dispose();
+    };
+  }, [sound, audio]);
+  useEffect(() => sound.setVolumes(settings.volume), [sound, settings.volume]);
+  /** 並べ読み（§4.6）：かざしている地名・建物の名（地図の該当区画を朱でほのかに示す） */
+  const [mapRef, setMapRef] = useState<MapRef | null>(null);
+  const saveIdForRefs = game?.saveId ?? null;
+  const zoneTerms = useMemo(
+    () => (saveIdForRefs === null ? [] : ZONES.map((zone) => ({ term: gazetteerFor(saveIdForRefs).zones[zone], ref: { kind: "zone" as const, zone } }))),
+    [saveIdForRefs],
+  );
+  /** 窓の光の天候：遷移の「窓の光」の段で新しい年のものに替える */
+  const [weather, setWeather] = useState<Weather>(() => weatherOf(lastRecord?.newspaper ?? null));
 
   const mode: "flat" | "3d" = settings.flat ? "flat" : "3d";
   const reduced = resolveReducedMotion(settings.motion, systemReducedMotion);
@@ -92,16 +125,87 @@ export function Desk({ session, settings, onSettings, systemReducedMotion, fpsFr
     if (key !== "") dispatch({ type: "newSheet", key });
   }, [key]);
 
-  // 結果の書類束が届いたら手元に来る
-  const resultTurn = phase === "result" ? (lastRecord?.turn ?? null) : null;
-  useEffect(() => {
-    if (resultTurn !== null) dispatch({ type: "resultArrived", turn: resultTurn });
-  }, [resultTurn]);
+  // ターン遷移シーケンス（§4.5）：押印 → 既決箱 → 窓の光 → 地図 → 配達 → 台帳（またはエンディング）。
+  // 結果の書類束は、シーケンスが終わってから手元に来る
+  const resultReady = submittedTurn.current !== null && lastRecord?.turn === submittedTurn.current && (phase === "result" || phase === "ended");
+  const endingStyle: EndingStyle | null = resultReady ? endingStyleOf(game?.ending ?? null) : null;
+  const sequence = useTurnSequence({
+    reduced: resolveReducedMotion(settings.motion, systemReducedMotion),
+    scale: sequenceScale,
+    result: { ready: resultReady, ending: endingStyle },
+    onStep: (step) => {
+      if (step === "weather" || step === "map") setWeather(weatherOf(lastRecordRef.current?.newspaper ?? null));
+      // 音（§8.1）：押印の瞬間の打撃・地図のペン先・配達の足音と書類・台帳の書き込み・町の印章
+      const seconds = sequenceStepMsRef.current / 1000;
+      if (step === "stamp") sound.play("stamp", reducedRef.current ? 0 : seconds * STAMP_HIT_AT);
+      else if (step === "map") sound.playFor("pen", seconds);
+      else if (step === "delivery") {
+        sound.play("footsteps");
+        sound.play("delivered", Math.min(0.5, seconds * 0.4));
+      } else if (step === "ledger") sound.playFor("pen", seconds * 0.8, 0.18);
+      else if (step === "ending" && endingStyleRef.current === "seal") sound.play("stamp", 0.2);
+    },
+    onDone: () => {
+      setWeather(weatherOf(lastRecordRef.current?.newspaper ?? null));
+      const record = lastRecordRef.current;
+      submittedTurn.current = null;
+      if (record !== null && phaseRef.current === "result") dispatch({ type: "resultArrived", turn: record.turn });
+    },
+  });
+  const sequenceStepMsRef = useRef(0);
+  sequenceStepMsRef.current = sequence.stepMs;
+  const reducedRef = useRef(false);
+  reducedRef.current = resolveReducedMotion(settings.motion, systemReducedMotion);
+  const endingStyleRef = useRef<EndingStyle | null>(null);
+  endingStyleRef.current = endingStyle;
+  const lastRecordRef = useRef(lastRecord);
+  lastRecordRef.current = lastRecord;
+  const phaseRef = useRef(phase);
+  phaseRef.current = phase;
 
-  // 差し戻し（検証エラー）で受付に戻ったら、押した判を消して書き直せるようにする
+  // 差し戻し（検証エラー）で受付に戻ったら、押した判を消して書き直せるようにする（遷移も止める）
+  const cancelSequence = sequence.cancel;
   useEffect(() => {
-    if (phase === "playing") dispatch({ type: "stampEnd" });
-  }, [phase]);
+    if (phase !== "playing") return;
+    dispatch({ type: "stampEnd" });
+    if (submittedTurn.current !== null && lastRecordRef.current?.turn !== submittedTurn.current) {
+      submittedTurn.current = null;
+      cancelSequence();
+    }
+  }, [phase, cancelSequence]);
+
+  // 「既決箱へ」の段：勅令用紙が机に戻り終えたところで、既決箱までの画面上のずれを測り、CSS の動き（.seq-file）に渡す
+  useEffect(() => {
+    if (sequence.step !== "file") return;
+    const measure = () => {
+      const sheet = document.querySelector<HTMLElement>('[data-object="decree"]');
+      const box = document.querySelector<HTMLElement>('[data-object="archive"]');
+      if (!sheet || !box) return;
+      const a = sheet.getBoundingClientRect();
+      const b = box.getBoundingClientRect();
+      sheet.style.setProperty("--file-dx", `${Math.round(b.left + b.width / 2 - (a.left + a.width / 2))}px`);
+      sheet.style.setProperty("--file-dy", `${Math.round(b.top + b.height / 2 - (a.top + a.height / 2))}px`);
+    };
+    const wait = window.setTimeout(measure, mode === "3d" ? timings.focusMs : 0);
+    return () => window.clearTimeout(wait);
+  }, [sequence.step, mode, timings.focusMs]);
+
+  useEffect(() => sound.setAmbience(weather.season, weather.sky), [sound, weather]);
+
+  // 手に取る・置く音（新聞は大きな紙の音）
+  const previousFocus = useRef(desk.focused);
+  useEffect(() => {
+    const before = previousFocus.current;
+    previousFocus.current = desk.focused;
+    if (desk.focused === before) return;
+    if (desk.focused !== null) sound.play(desk.focused === "newspaper" ? "newspaper" : "pickUp");
+    else sound.play("putDown");
+  }, [desk.focused, sound]);
+
+  // 始め直したら窓の光も着任時に戻す
+  useEffect(() => {
+    if (lastRecord === null) setWeather(weatherOf(null));
+  }, [lastRecord]);
 
   // 始め直して束が無くなったら手元から下ろす
   useEffect(() => {
@@ -122,13 +226,6 @@ export function Desk({ session, settings, onSettings, systemReducedMotion, fpsFr
     if (previous !== null && previous.id !== desk.focused) logHandled.current(previous.id, mode, now - previous.since);
     if (desk.focused !== previous?.id) held.current = desk.focused === null ? null : { id: desk.focused, since: now };
   }, [desk.focused, mode]);
-
-  useEffect(
-    () => () => {
-      if (stampTimer.current !== null) window.clearTimeout(stampTimer.current);
-    },
-    [],
-  );
 
   const busy = phase !== "playing";
   const hasAide = (game?.aides.length ?? 0) > 0;
@@ -160,29 +257,23 @@ export function Desk({ session, settings, onSettings, systemReducedMotion, fpsFr
     dispatch({ type: "pickUp", id });
   };
 
-  const finishStamp = () => {
-    if (stampTimer.current !== null) window.clearTimeout(stampTimer.current);
-    stampTimer.current = null;
-    const run = pendingStamp.current;
-    pendingStamp.current = null;
-    run?.();
-  };
-
   const stamp = () => {
-    if (!check.ready || !decreeInHand || check.declaration === "invalid") return;
+    if (!check.ready || !decreeInHand || check.declaration === "invalid" || sequence.step !== null) return;
     const { decree } = check;
     const intent = check.declaration;
     dispatch({ type: "stampStart" });
-    pendingStamp.current = () => {
+    submittedTurn.current = game?.turn ?? null;
+    // 押印の段が終わったら、用紙を机に戻して執行する（勅令用紙は次の段で既決箱へ）
+    sequence.start(() => {
       if (mode === "3d") dispatch({ type: "putDown" });
       void actions.submit(decree, intent);
-    };
-    stampTimer.current = window.setTimeout(finishStamp, timings.stampMs);
+    });
   };
 
   /** ← →：手元の書類をめくる */
   const page = (delta: -1 | 1) => {
     if (game === null) return;
+    if (desk.focused !== null) sound.play("pageTurn");
     switch (desk.focused) {
       case "result":
         if (lastRecord !== null && resultView !== null) {
@@ -215,7 +306,7 @@ export function Desk({ session, settings, onSettings, systemReducedMotion, fpsFr
   };
 
   const skip = () => {
-    if (pendingStamp.current !== null) finishStamp();
+    sequence.skip();
     setInstant(true);
     requestAnimationFrame(() => setInstant(false));
   };
@@ -238,6 +329,8 @@ export function Desk({ session, settings, onSettings, systemReducedMotion, fpsFr
   };
 
   // §4.7 のキー操作。エンディングと設定の画面が開いている間は机に届けない
+  const sequenceActive = useRef(false);
+  sequenceActive.current = sequence.step !== null;
   const runRef = useRef(run);
   runRef.current = run;
   const ctx = useRef<{ mode: "flat" | "3d"; focused: PickableId | null; blocked: boolean }>({ mode, focused: desk.focused, blocked: false });
@@ -245,7 +338,7 @@ export function Desk({ session, settings, onSettings, systemReducedMotion, fpsFr
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.defaultPrevented || ctx.current.blocked) return;
-      const animating = pendingStamp.current !== null || performance.now() < transitionUntil.current;
+      const animating = sequenceActive.current || performance.now() < transitionUntil.current;
       const command = commandForKey(
         { key: e.key, isComposing: e.isComposing, target: keyTargetOf(e.target), modifiers: e.ctrlKey || e.metaKey || e.altKey },
         { mode: ctx.current.mode, focused: ctx.current.focused, animating },
@@ -310,7 +403,7 @@ export function Desk({ session, settings, onSettings, systemReducedMotion, fpsFr
   const render = (id: DeskObjectId, interactive: boolean): ReactNode => {
     switch (id) {
       case "lamp":
-        return <Lamp />;
+        return <Lamp out={lampOut} />;
       case "ledger":
         return (
           <LedgerPanel
@@ -324,7 +417,8 @@ export function Desk({ session, settings, onSettings, systemReducedMotion, fpsFr
         );
       case "map":
         return (
-          <MapPanel
+          <>
+            <MapPanel
             game={game}
             notes={notes}
             live={interactive}
@@ -333,7 +427,16 @@ export function Desk({ session, settings, onSettings, systemReducedMotion, fpsFr
             onSelect={(gridIndex) => dispatch({ type: "selectParcel", gridIndex })}
             onPin={(text, gridIndex) => tearNote(text, { kind: "parcel", gridIndex })}
             surveyDelay={surveyDelay}
+            hold={holdMap}
+            highlight={refsActive ? mapRef : null}
+            inkMs={sequence.step === "map" ? sequence.stepMs : null}
           />
+            {sealShown && (
+              <div className="town-seal" aria-hidden data-testid="town-seal">
+                {ui.ending.seal}
+              </div>
+            )}
+          </>
         );
       case "letters":
         return (
@@ -348,6 +451,7 @@ export function Desk({ session, settings, onSettings, systemReducedMotion, fpsFr
             onOpen={(aideId) => {
               if (lastRecord === null) return;
               dispatch({ type: "openLetter", key: letterKey(lastRecord.turn, aideId) });
+              sound.play("waxCrack");
               actions.logLetterOpened(aideId);
             }}
             notesFor={(aideId) => (lastRecord === null ? [] : letterNotes(lastRecord.turn, aideId))}
@@ -403,7 +507,10 @@ export function Desk({ session, settings, onSettings, systemReducedMotion, fpsFr
           <ResultStack
             record={lastRecord}
             top={resultView?.top ?? 0}
-            onFlip={(to, count) => dispatch({ type: "flip", turn: lastRecord.turn, to, sheetCount: count })}
+            onFlip={(to, count) => {
+              sound.play("pageTurn");
+              dispatch({ type: "flip", turn: lastRecord.turn, to, sheetCount: count });
+            }}
             inHand={interactive && desk.focused === "result"}
             onClose={putDown}
           />
@@ -413,7 +520,12 @@ export function Desk({ session, settings, onSettings, systemReducedMotion, fpsFr
           <DecreePanel
             draft={desk.draft}
             check={check}
-            onDraft={(draft) => dispatch({ type: "draft", draft })}
+            onDraft={(draft) => {
+              // 筆記音（入力1文字ごと、間引いて）と、付箋を貼る音
+              if ([...draft.text].length > [...desk.draft.text].length) sound.play("brush");
+              if ((Object.keys(draft.tags) as (keyof typeof draft.tags)[]).some((k) => draft.tags[k] !== "" && draft.tags[k] !== desk.draft.tags[k])) sound.play("sticky");
+              dispatch({ type: "draft", draft });
+            }}
             interactive={interactive}
             locked={locked}
             stamping={desk.stamping}
@@ -429,7 +541,22 @@ export function Desk({ session, settings, onSettings, systemReducedMotion, fpsFr
     }
   };
 
+  // 遷移の段ごとの見た目は CSS（desk.css の .seq-*）。地図は「地図の更新」の段まで前の年のまま
+  const step = sequence.step;
+  const holdMap = step === "stamp" || step === "file" || step === "waiting" || step === "weather";
+  const endingShown = phase === "ended" && game.ending !== null && step === null;
+  // 終わった年は、演出の後も（最後の結果束を読むあいだも、エンディングの画面でも）ランプは消えたまま・印章は押されたまま
+  const finished = game.ending !== null && step === null;
+  const finalStyle = endingStyleOf(game.ending);
+  const lampOut = (step === "ending" && endingStyle === "lampOut") || (finished && finalStyle === "lampOut");
+  const sealShown = (step === "ending" && endingStyle === "seal") || (finished && finalStyle === "seal");
+
+  // 並べ読みは、地図が書類と並んで見えているとき（立体の机の並べ読み・平面モード）だけ
+  const refsActive = mode === "flat" || (desk.sideBySide && desk.focused !== null);
+  const refs = { active: refsActive, zones: zoneTerms, onRef: setMapRef };
+
   const rootStyle: CSSProperties & Record<string, string | number> = {
+    "--seq-ms": `${sequence.stepMs}ms`,
     "--focus-ms": `${timings.focusMs}ms`,
     "--reduced-fade-ms": `${timings.fadeMs}ms`,
     "--stamp-ms": `${timings.stampMs}ms`,
@@ -437,7 +564,14 @@ export function Desk({ session, settings, onSettings, systemReducedMotion, fpsFr
   };
 
   return (
-    <div className={`desk mode-${mode} ${reduced ? "reduce-motion" : ""} ${lowPower ? "low-power" : ""}`} style={rootStyle} data-testid="desk">
+    <div
+      className={`desk mode-${mode} ${reduced ? "reduce-motion" : ""} ${lowPower ? "low-power" : ""} ${step === null ? "" : `in-sequence seq-${step}`} ${lampOut ? "lamp-out" : ""}`}
+      style={rootStyle}
+      data-testid="desk"
+      data-sequence-step={step ?? "idle"}
+      data-sequence-total-ms={sequence.lastTotalMs === null ? undefined : Math.round(sequence.lastTotalMs)}
+      data-weather={`${weather.season} ${weather.sky}`}
+    >
       <header className="desk-header">
         <h1 className="title">{ui.title}</h1>
         <span className="year" data-testid="year">
@@ -477,6 +611,7 @@ export function Desk({ session, settings, onSettings, systemReducedMotion, fpsFr
         </button>
       </header>
 
+      <MapRefContext.Provider value={refs}>
       {mode === "3d" ? (
         <DeskStage
           objects={objects}
@@ -488,12 +623,19 @@ export function Desk({ session, settings, onSettings, systemReducedMotion, fpsFr
           parallax={!reduced && !lowPower}
           richLighting={!lowPower}
           instant={instant}
+          weather={weather}
         />
       ) : (
-        <FlatDesk objects={objects} render={render} desk={desk} onPick={pickUp} onPutDown={putDown} />
+        <FlatDesk objects={objects} render={render} desk={desk} onPick={pickUp} onPutDown={putDown} weather={weather} />
       )}
+      </MapRefContext.Provider>
 
-      {phase === "ended" && game.ending !== null && (
+      {step !== null && (
+        <button className="sequence-skip" onClick={skip} aria-label={ui.sequence.skipLabel} data-testid="sequence-skip">
+          <span className="sequence-skip-hint">{step === "waiting" ? ui.sequence.waiting : ui.sequence.skipHint}</span>
+        </button>
+      )}
+      {endingShown && (
         <EndingScreen ending={game.ending} turns={game.turn - 1} onRestart={() => void actions.restart()} />
       )}
       {settingsOpen && <SettingsPanel settings={settings} onChange={onSettings} lowPower={lowPower} onClose={() => setSettingsOpen(false)} />}

@@ -129,3 +129,38 @@ export const toEastFrame = (side: Side, p: Point): Point => {
   for (let i = 0; i < TURNS[side]; i++) [dx, dy] = [-dy, dx];
   return { x: c + dx, y: c + dy };
 };
+
+/**
+ * 多角形の内側だけに引く平行線（ハッチング）の線分。angle の向きの線を spacing おきに引き、多角形の辺との交点で切る。
+ * 色だけに頼らずに区画を示すとき（並べ読みの朱のしるし）に使う。
+ */
+export const hatchSegments = (polygon: readonly Point[], spacing: number, angle: number): (readonly [Point, Point])[] => {
+  const dx = Math.cos(angle);
+  const dy = Math.sin(angle);
+  const nx = -dy;
+  const ny = dx;
+  const project = (p: Point) => p.x * nx + p.y * ny;
+  let lo = Infinity;
+  let hi = -Infinity;
+  for (const p of polygon) {
+    lo = Math.min(lo, project(p));
+    hi = Math.max(hi, project(p));
+  }
+  const out: (readonly [Point, Point])[] = [];
+  for (let s = Math.ceil(lo / spacing) * spacing; s <= hi; s += spacing) {
+    const hits: Point[] = [];
+    for (let i = 0; i < polygon.length; i++) {
+      const a = polygon[i] as Point;
+      const b = polygon[(i + 1) % polygon.length] as Point;
+      const pa = project(a) - s;
+      const pb = project(b) - s;
+      if (pa === pb || pa * pb > 0 || (pa === 0 && pb === 0)) continue;
+      if (pb === 0) continue; // 頂点は次の辺で数える（二重に数えない）
+      const t = pa / (pa - pb);
+      hits.push({ x: a.x + (b.x - a.x) * t, y: a.y + (b.y - a.y) * t });
+    }
+    hits.sort((p, q) => p.x * dx + p.y * dy - (q.x * dx + q.y * dy));
+    for (let k = 0; k + 1 < hits.length; k += 2) out.push([hits[k] as Point, hits[k + 1] as Point]);
+  }
+  return out;
+};

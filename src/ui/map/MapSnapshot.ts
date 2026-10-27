@@ -27,6 +27,8 @@ export const drawSnapshot = (source: CanvasImageSource, target: HTMLCanvasElemen
     current = half;
     currentSize = half.width;
   }
+  // 描き込みの演出が縮めた変形を残していても、ここでは原寸で描く
+  ctx.setTransform(1, 0, 0, 1, 0, 0);
   ctx.clearRect(0, 0, size, size);
   ctx.drawImage(current, 0, 0, size, size);
   return true;

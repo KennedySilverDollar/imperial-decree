@@ -608,6 +608,8 @@ export const messages = {
       timeoutTitle: "時は尽きた",
       turns: (n: number) => `治世 ${n} 年`,
       restart: "もう一度治める",
+      /** 成功の年、地図に押す町の印章の文字 */
+      seal: "町",
       lastWords: {
         population: "最後の一家が去り、門は閉ざされた。",
         treasury: "金庫は空になり、役人たちは去った。",
@@ -659,6 +661,12 @@ export const messages = {
       pinnedLabel: "留めたメモ",
       slip: "メモ",
     },
+    /** ターン遷移（SPEC_v3.3 §4.5） */
+    sequence: {
+      skipHint: "クリックかスペースで飛ばす",
+      skipLabel: "遷移の演出を飛ばす",
+      waiting: "参謀が勅令を読み解いている……",
+    },
     archive: {
       title: "既決箱",
       empty: "まだ既決の書類はない",
@@ -679,6 +687,8 @@ export const messages = {
       textSize: "手元の文字の大きさ",
       textSizes: { normal: "標準", large: "大", xlarge: "特大" },
       showFps: "FPS を表示する（開発用）",
+      volume: "音量",
+      volumes: { master: "主音量", sfx: "効果音", ambient: "環境音" },
       lowPower: "動きが重いため、視差・ぼかし・照明の重ねを止めています",
     },
     fps: {

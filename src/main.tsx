@@ -33,6 +33,8 @@ const fpsFromQuery = query.has("fps");
 const adaptive = !query.has("noadapt");
 // ?surveydelay で測量の遅れ（SPEC_v3.3 §5.9。既定は無効の実験フラグ）を有効にする
 const surveyDelay = query.has("surveydelay");
+// ?seqscale=N で遷移の演出を N 倍ゆっくりにする（開発用：段ごとのスクリーンショット）
+const sequenceScale = Math.min(10, Math.max(0.1, Number(query.get("seqscale") ?? 1) || 1));
 
 // 測量図の Worker を先に起こす（起動の待ちを、アプリの読み込みと重ねる）
 if (!debug) prewarmSurveyWorker();
@@ -48,7 +50,7 @@ if (root) {
           envToken={import.meta.env.VITE_LLM_PROXY_TOKEN ?? ""}
         />
       ) : (
-        <App api={gameApi} settingsStorage={window.localStorage} notesStorage={window.localStorage} fpsFromQuery={fpsFromQuery} adaptive={adaptive} surveyDelay={surveyDelay} />
+        <App api={gameApi} settingsStorage={window.localStorage} notesStorage={window.localStorage} fpsFromQuery={fpsFromQuery} adaptive={adaptive} surveyDelay={surveyDelay} sequenceScale={sequenceScale} />
       )}
     </StrictMode>,
   );

@@ -1,3 +1,4 @@
+import type { AudioService } from "./audio/AudioService";
 import { Desk } from "./desk/Desk";
 import { SURVEY_DELAY_DEFAULT } from "./map/mapConstants";
 import type { GameApi } from "./game/GameApi";
@@ -18,9 +19,13 @@ interface Props {
   readonly adaptive?: boolean;
   /** 測量の遅れ（SPEC_v3.3 §5.9）。既定は無効 */
   readonly surveyDelay?: boolean;
+  /** 開発用：遷移の演出の倍率（?seqscale） */
+  readonly sequenceScale?: number;
+  /** 音の係（テストで差し替える） */
+  readonly audio?: AudioService;
 }
 
-export function App({ api, settingsStorage, notesStorage = null, fpsFromQuery, adaptive = true, surveyDelay = SURVEY_DELAY_DEFAULT }: Props) {
+export function App({ api, settingsStorage, notesStorage = null, fpsFromQuery, adaptive = true, surveyDelay = SURVEY_DELAY_DEFAULT, sequenceScale = 1, audio }: Props) {
   const session = useGameSession(api);
   const [settings, updateSettings] = useSettings(settingsStorage);
   const systemReducedMotion = useSystemReducedMotion();
@@ -34,6 +39,8 @@ export function App({ api, settingsStorage, notesStorage = null, fpsFromQuery, a
       adaptive={adaptive}
       notesStorage={notesStorage}
       surveyDelay={surveyDelay}
+      sequenceScale={sequenceScale}
+      {...(audio ? { audio } : {})}
     />
   );
 }

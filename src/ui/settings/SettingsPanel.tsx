@@ -2,7 +2,9 @@ import { useEffect, useRef } from "react";
 import { messages } from "../../i18n/messages";
 import { MOTION_PREFERENCES, TEXT_SIZES, type Settings } from "./settings";
 
-// 設定の紙（SPEC_v3.3 §9）。机の上ではなく画面の手前に、変形なしで出す。
+const VOLUME_KEYS = ["master", "sfx", "ambient"] as const;
+
+// 設定の紙（SPEC_v3.3 §8.1・§9）。机の上ではなく画面の手前に、変形なしで出す。
 
 interface Props {
   readonly settings: Settings;
@@ -65,6 +67,24 @@ export function SettingsPanel({ settings, onChange, lowPower, onClose }: Props) 
                 data-testid={`setting-text-${size}`}
               />
               {t.textSizes[size]}
+            </label>
+          ))}
+        </fieldset>
+        <fieldset className="settings-row settings-volumes">
+          <legend className="settings-label">{t.volume}</legend>
+          {VOLUME_KEYS.map((key) => (
+            <label key={key} className="settings-volume">
+              <span>{t.volumes[key]}</span>
+              <input
+                type="range"
+                min={0}
+                max={100}
+                step={5}
+                value={Math.round(settings.volume[key] * 100)}
+                onChange={(e) => onChange({ volume: { ...settings.volume, [key]: Number(e.target.value) / 100 } })}
+                data-testid={`setting-volume-${key}`}
+              />
+              <span className="settings-volume-value">{Math.round(settings.volume[key] * 100)}</span>
             </label>
           ))}
         </fieldset>

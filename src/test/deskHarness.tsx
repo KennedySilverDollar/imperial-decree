@@ -15,6 +15,11 @@ export const readable = (root: Element): string => {
     }
     if (!(node instanceof HTMLElement)) return;
     if (node.getAttribute("aria-hidden") === "true") return;
+    // 並べ読みの語（map-ref）は文中の inline 要素：それを含む文はひとつながりに読む（平面では常に付き、俯瞰では Tab のときだけ付くため）
+    if (Array.from(node.children).some((child) => child.getAttribute("data-testid") === "map-ref")) {
+      parts.push(node.textContent ?? "");
+      return;
+    }
     if (node instanceof HTMLTextAreaElement || node instanceof HTMLInputElement) {
       parts.push(`[${node.value}]`);
       return;
