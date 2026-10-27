@@ -1,14 +1,15 @@
-import { Effect, Either, Layer, ManagedRuntime } from "effect";
+import { Effect, Layer, ManagedRuntime } from "effect";
 import type { Decree } from "../domain/Decree";
 import type { GameState } from "../domain/GameState";
 import type { IntentDeclaration } from "../domain/IntentDeclaration";
 import { LLMServiceTemplateMock } from "../engine/MockLLM";
 import { logKpi, type KpiEvent } from "../engine/Telemetry";
-import { appoint, appointmentCandidates, dismiss, newGame, playTurn, type TurnError } from "../engine/TurnMachine";
+import { appoint, appointmentCandidates, dismiss, newGame, playTurn } from "../engine/TurnMachine";
 import { LLMServiceProxy } from "../services/LLMServiceProxy";
 import { LogServiceLocalStorage, readStoredLog } from "../services/LogService";
 import { RngLive } from "../services/Rng";
 import { SaveService, SaveServiceLocalStorage } from "../services/SaveService";
+import type { GameApi } from "./game/GameApi";
 
 // UI と TurnMachine の橋渡し（CLAUDE.md §4-5）。UI はゲームロジックを持たず、ここを呼ぶだけ。
 // 参謀：VITE_LLM_PROXY_URL と VITE_LLM_PROXY_TOKEN があればプロキシ経由の Mistral、なければモック（テンプレート解釈）。
@@ -32,14 +33,14 @@ const layer = Layer.mergeAll(
 
 const runtime = ManagedRuntime.make(layer);
 
-export type Result<A> = Either.Either<A, TurnError>;
-
 /** 新しいゲームの seed。ゲーム内の乱数ではないので Rng を通さない（CLAUDE.md §4-3 の対象外） */
 const freshSeed = (): number => crypto.getRandomValues(new Uint32Array(1))[0] ?? Date.now();
 
 export const freshId = (): string => crypto.randomUUID();
 
-export const gameApi = {
+export const gameApi: GameApi = {
+  llmMode,
+
   load: (): Promise<GameState | null> =>
     runtime.runPromise(Effect.flatMap(SaveService, (save) => save.load).pipe(Effect.orElseSucceed(() => null))),
 
@@ -53,16 +54,14 @@ export const gameApi = {
     );
   },
 
-  play: (state: GameState, decree: Decree, intent: IntentDeclaration | null): Promise<Result<GameState>> =>
+  play: (state: GameState, decree: Decree, intent: IntentDeclaration | null) =>
     runtime.runPromise(Effect.either(playTurn(state, decree, intent))),
 
   candidates: (state: GameState): Promise<readonly string[]> => runtime.runPromise(appointmentCandidates(state)),
 
-  appoint: (state: GameState, candidateId: string): Promise<Result<GameState>> =>
-    runtime.runPromise(Effect.either(appoint(state, candidateId))),
+  appoint: (state: GameState, candidateId: string) => runtime.runPromise(Effect.either(appoint(state, candidateId))),
 
-  dismiss: (state: GameState, aideId: string): Promise<Result<GameState>> =>
-    runtime.runPromise(Effect.either(dismiss(state, aideId))),
+  dismiss: (state: GameState, aideId: string) => runtime.runPromise(Effect.either(dismiss(state, aideId))),
 
   log: (event: KpiEvent): void => {
     runtime.runFork(logKpi(event));

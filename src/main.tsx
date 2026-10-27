@@ -4,12 +4,13 @@ import "@fontsource/noto-serif-jp/700.css";
 import "@fontsource/noto-sans-jp/400.css";
 import "@fontsource/noto-sans-jp/700.css";
 import "./ui/styles.css";
+import "./ui/desk/desk.css";
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import { PAPER_FADE_MS, STAMP_ANIMATION_MS } from "./domain/constants";
 import { messages } from "./i18n/messages";
 import { DebugPanel } from "./ui/panels/DebugPanel";
-import { llmMode } from "./ui/runtime";
+import { gameApi, llmMode } from "./ui/runtime";
 import { App } from "./ui/App";
 
 document.title = messages.ui.title;
@@ -18,8 +19,12 @@ document.title = messages.ui.title;
 document.documentElement.style.setProperty("--stamp-ms", `${STAMP_ANIMATION_MS}ms`);
 document.documentElement.style.setProperty("--fade-ms", `${PAPER_FADE_MS}ms`);
 
-// ?debug で AI 診断画面（ゲームの状態には触れない）
-const debug = new URLSearchParams(window.location.search).has("debug");
+// ?debug で AI 診断画面（ゲームの状態には触れない）、?fps で開発用の FPS 表示、
+// ?noadapt で性能の自動調整を止める（計測で、演出をすべて有効にしたままの FPS を測るため）
+const query = new URLSearchParams(window.location.search);
+const debug = query.has("debug");
+const fpsFromQuery = query.has("fps");
+const adaptive = !query.has("noadapt");
 
 const root = document.getElementById("root");
 if (root) {
@@ -32,7 +37,7 @@ if (root) {
           envToken={import.meta.env.VITE_LLM_PROXY_TOKEN ?? ""}
         />
       ) : (
-        <App />
+        <App api={gameApi} settingsStorage={window.localStorage} fpsFromQuery={fpsFromQuery} adaptive={adaptive} />
       )}
     </StrictMode>,
   );

@@ -551,6 +551,10 @@ export const messages = {
       cost: (pc: number, treasury: number) => `判を押すと 政治資本-${pc}・国庫-${treasury}`,
       noAideWarning: "側近がいないため、勅令は執行されない",
       noCapital: "政治資本が足りない。来年まで待つか、側近の任免を控えよ",
+      /** 俯瞰で見たときの、まだ何も書いていない用紙 */
+      blankSheet: "（白紙）",
+      tagLine: (label: string, value: string) => `${label}：${value}`,
+      intentLine: (param: string, value: string, direction: string) => `意図：${param}を${value}${direction}`,
     },
     result: {
       heading: (turn: number) => `第${turn}年の顛末`,
@@ -584,6 +588,42 @@ export const messages = {
     },
     errors: {
       unexpected: "書類が乱れた。もう一度判を押してほしい",
+    },
+    /** 執務机（SPEC_v3.3 §3・§4） */
+    desk: {
+      objects: {
+        lamp: "ランプ",
+        ledger: "台帳",
+        map: "測量図",
+        letters: "側近の書簡",
+        newspaper: "新聞",
+        result: "結果の書類束",
+        decree: "勅令用紙",
+        stamp: "判子と朱肉",
+      },
+      pickUp: (name: string) => `${name}を手に取る`,
+      inHand: (name: string) => `${name}（手元）`,
+      stageLabel: "執務机",
+      putDownHint: "Esc・右クリック・机の空いた所で置く",
+      keysHint: "1 地図　2 新聞　3 書簡　4 勅令用紙　5 台帳　6 結果束　Tab 並べ読み",
+    },
+    settings: {
+      open: "設定",
+      title: "設定",
+      close: "閉じる",
+      flat: "平面モード（立体の机を使わず、書類を平らに並べる）",
+      motion: "動きを減らす",
+      motionOptions: { system: "OS の設定に従う", reduce: "減らす", full: "減らさない" },
+      textSize: "手元の文字の大きさ",
+      textSizes: { normal: "標準", large: "大", xlarge: "特大" },
+      showFps: "FPS を表示する（開発用）",
+      lowPower: "動きが重いため、視差・ぼかし・照明の重ねを止めています",
+    },
+    fps: {
+      current: (n: number) => `FPS ${n}`,
+      min: (n: number) => `最低 ${n}`,
+      worst: (ms: number) => `最長 ${ms}ms`,
+      lowPower: "軽量化中",
     },
   },
 

@@ -1,4 +1,4 @@
-import { useState, type ReactNode } from "react";
+import type { ReactNode } from "react";
 import type { DecreeIntent } from "../../domain/DecreeIntent";
 import type { TurnRecord } from "../../domain/TurnRecord";
 import { PARAM_KEYS } from "../../domain/Vocabulary";
@@ -142,57 +142,57 @@ const buildSheets = (record: TurnRecord): readonly Sheet[] => {
   return sheets;
 };
 
+export const sheetCountOf = (record: TurnRecord): number => buildSheets(record).length;
+
 interface Props {
   readonly record: TurnRecord;
-  readonly onClose: (stats: { readonly flips: number; readonly deepestSheet: number }) => void;
+  /** いま一番上の紙（めくり位置は机の UI ストアが持つ） */
+  readonly top: number;
+  readonly onFlip: (to: number, sheetCount: number) => void;
+  /** 手元にある（めくれる・机に戻せる）か */
+  readonly inHand: boolean;
+  readonly onClose: () => void;
 }
 
-export function ResultStack({ record, onClose }: Props) {
+// 結果の書類束（SPEC_v3.3 §4.4）。手元にあるときだけ、めくる・机に戻すの操作と計測用の目印を出す。
+export function ResultStack({ record, top, onFlip, inHand, onClose }: Props) {
   const sheets = buildSheets(record);
-  const [top, setTop] = useState(0);
-  const [flips, setFlips] = useState(0);
-  const [deepest, setDeepest] = useState(0);
-
-  const go = (next: number) => {
-    setTop(next);
-    setFlips((n) => n + 1);
-    setDeepest((d) => Math.max(d, next));
-  };
+  const go = (next: number) => onFlip(next, sheets.length);
 
   return (
-    <div className="overlay fade-in" role="dialog" aria-modal="true" aria-label={r.heading(record.turn)}>
-      <div className="result-stack">
-        <h2 className="result-heading">{r.heading(record.turn)}</h2>
-        <div className="sheets" data-testid="result-sheets">
-          {sheets.map((sheet, index) => {
-            const offset = index - top;
-            const state = offset < 0 ? "flipped" : offset === 0 ? "current" : "under";
-            return (
-              <article
-                key={sheet.key}
-                className={`paper sheet sheet-${state} ${sheet.memo ? "memo" : ""}`}
-                style={{ zIndex: sheets.length - index, ["--depth" as string]: Math.max(0, offset) }}
-                aria-hidden={state !== "current"}
-                onClick={() => state === "under" && go(index)}
-              >
-                <h3 className="sheet-title">{sheet.title}</h3>
-                <div className="sheet-body">{sheet.body}</div>
-              </article>
-            );
-          })}
-        </div>
-        <div className="sheet-controls">
-          <button className="button" disabled={top === 0} onClick={() => go(top - 1)}>
-            {r.back}
-          </button>
-          <span className="sheet-count">{r.sheetOf(top + 1, sheets.length)}</span>
-          <button className="button" disabled={top >= sheets.length - 1} onClick={() => go(top + 1)} data-testid="flip">
-            {r.flip}
-          </button>
-          <button className="button primary" onClick={() => onClose({ flips, deepestSheet: deepest + 1 })} data-testid="close-result">
+    <div className="result-stack" aria-label={r.heading(record.turn)}>
+      <h2 className="result-heading">{r.heading(record.turn)}</h2>
+      <div className="sheets" data-testid={inHand ? "result-sheets" : undefined}>
+        {sheets.map((sheet, index) => {
+          const offset = index - top;
+          const state = offset < 0 ? "flipped" : offset === 0 ? "current" : "under";
+          return (
+            <article
+              key={sheet.key}
+              className={`paper sheet sheet-${state} ${sheet.memo ? "memo" : ""}`}
+              style={{ zIndex: sheets.length - index, ["--depth" as string]: Math.max(0, offset) }}
+              aria-hidden={state !== "current"}
+              onClick={() => inHand && state === "under" && go(index)}
+            >
+              <h3 className="sheet-title">{sheet.title}</h3>
+              <div className="sheet-body">{sheet.body}</div>
+            </article>
+          );
+        })}
+      </div>
+      <div className="sheet-controls">
+        <button className="button" disabled={!inHand || top === 0} onClick={() => go(top - 1)}>
+          {r.back}
+        </button>
+        <span className="sheet-count">{r.sheetOf(top + 1, sheets.length)}</span>
+        <button className="button" disabled={!inHand || top >= sheets.length - 1} onClick={() => go(top + 1)} data-testid={inHand ? "flip" : undefined}>
+          {r.flip}
+        </button>
+        {inHand && (
+          <button className="button primary" onClick={onClose} data-testid="close-result">
             {r.close}
           </button>
-        </div>
+        )}
       </div>
     </div>
   );

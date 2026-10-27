@@ -1,16 +1,9 @@
 import type { IntentDirection } from "../../domain/IntentDeclaration";
 import { PARAM_KEYS, type ParamKey } from "../../domain/Vocabulary";
 import { messages } from "../../i18n/messages";
+import type { IntentDraft } from "../desk/decreeDraft";
 
 // 意図宣言（SPEC §6.2, §12.2）：勅令の余白に鉛筆で書き添える体裁。任意入力。
-
-export interface IntentDraft {
-  readonly param: ParamKey | "";
-  readonly direction: IntentDirection;
-  readonly value: string;
-}
-
-export const EMPTY_INTENT: IntentDraft = { param: "", direction: "increase", value: "" };
 
 const DIRECTIONS: readonly IntentDirection[] = ["increase", "decrease", "absolute"];
 
