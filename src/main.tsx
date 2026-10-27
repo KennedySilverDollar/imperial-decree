@@ -17,6 +17,7 @@ import { messages } from "./i18n/messages";
 import { DebugPanel } from "./ui/panels/DebugPanel";
 import { gameApi, llmMode } from "./ui/runtime";
 import { App } from "./ui/App";
+import { prewarmSurveyWorker } from "./ui/map/surveyLoader";
 
 document.title = messages.ui.title;
 
@@ -30,6 +31,11 @@ const query = new URLSearchParams(window.location.search);
 const debug = query.has("debug");
 const fpsFromQuery = query.has("fps");
 const adaptive = !query.has("noadapt");
+// ?surveydelay で測量の遅れ（SPEC_v3.3 §5.9。既定は無効の実験フラグ）を有効にする
+const surveyDelay = query.has("surveydelay");
+
+// 測量図の Worker を先に起こす（起動の待ちを、アプリの読み込みと重ねる）
+if (!debug) prewarmSurveyWorker();
 
 const root = document.getElementById("root");
 if (root) {
@@ -42,7 +48,7 @@ if (root) {
           envToken={import.meta.env.VITE_LLM_PROXY_TOKEN ?? ""}
         />
       ) : (
-        <App api={gameApi} settingsStorage={window.localStorage} notesStorage={window.localStorage} fpsFromQuery={fpsFromQuery} adaptive={adaptive} />
+        <App api={gameApi} settingsStorage={window.localStorage} notesStorage={window.localStorage} fpsFromQuery={fpsFromQuery} adaptive={adaptive} surveyDelay={surveyDelay} />
       )}
     </StrictMode>,
   );

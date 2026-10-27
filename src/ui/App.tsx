@@ -1,4 +1,5 @@
 import { Desk } from "./desk/Desk";
+import { SURVEY_DELAY_DEFAULT } from "./map/mapConstants";
 import type { GameApi } from "./game/GameApi";
 import { useGameSession } from "./game/useGameSession";
 import type { NotesStorage } from "./notes/notesStorage";
@@ -15,9 +16,11 @@ interface Props {
   readonly fpsFromQuery: boolean;
   /** 性能の自動調整（SPEC_v3.3 §9）。計測のときだけ止める */
   readonly adaptive?: boolean;
+  /** 測量の遅れ（SPEC_v3.3 §5.9）。既定は無効 */
+  readonly surveyDelay?: boolean;
 }
 
-export function App({ api, settingsStorage, notesStorage = null, fpsFromQuery, adaptive = true }: Props) {
+export function App({ api, settingsStorage, notesStorage = null, fpsFromQuery, adaptive = true, surveyDelay = SURVEY_DELAY_DEFAULT }: Props) {
   const session = useGameSession(api);
   const [settings, updateSettings] = useSettings(settingsStorage);
   const systemReducedMotion = useSystemReducedMotion();
@@ -30,6 +33,7 @@ export function App({ api, settingsStorage, notesStorage = null, fpsFromQuery, a
       fpsFromQuery={fpsFromQuery}
       adaptive={adaptive}
       notesStorage={notesStorage}
+      surveyDelay={surveyDelay}
     />
   );
 }

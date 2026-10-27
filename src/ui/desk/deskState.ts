@@ -34,6 +34,8 @@ export interface DeskUiState {
   readonly archive: { readonly turn: number | null; readonly doc: ArchiveDoc };
   /** メモ帳の書きかけ */
   readonly noteDraft: NoteDraft;
+  /** 測量図で選んでいる区画（その区画の記事・報告を出し、メモの留め先にできる） */
+  readonly mapSelection: number | null;
 }
 
 export type DeskAction =
@@ -49,7 +51,8 @@ export type DeskAction =
   | { readonly type: "page"; readonly key: string; readonly to: number; readonly count: number }
   | { readonly type: "openLetter"; readonly key: string }
   | { readonly type: "archive"; readonly turn: number | null; readonly doc: ArchiveDoc }
-  | { readonly type: "noteDraft"; readonly draft: NoteDraft };
+  | { readonly type: "noteDraft"; readonly draft: NoteDraft }
+  | { readonly type: "selectParcel"; readonly gridIndex: number | null };
 
 /** めくり位置のキー */
 export const pageKey = {
@@ -76,6 +79,7 @@ export const initialDeskState = (draftKey: string): DeskUiState => ({
   opened: [],
   archive: { turn: null, doc: "newspaper" },
   noteDraft: { text: "", target: "none" },
+  mapSelection: null,
 });
 
 const toTop = (order: readonly DeskObjectId[], ...ids: DeskObjectId[]): readonly DeskObjectId[] => [
@@ -137,5 +141,7 @@ export const deskReducer = (state: DeskUiState, action: DeskAction): DeskUiState
       return { ...state, archive: { turn: action.turn, doc: action.doc } };
     case "noteDraft":
       return { ...state, noteDraft: action.draft };
+    case "selectParcel":
+      return { ...state, mapSelection: action.gridIndex };
   }
 };

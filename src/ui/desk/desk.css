@@ -1307,3 +1307,189 @@
   flex: none;
   width: 5em;
 }
+
+/* ---------- U3：測量図（SPEC_v3.3 §5） ---------- */
+.map-canvas.survey-frame {
+  position: relative;
+  width: 100%;
+  max-width: 640px;
+  aspect-ratio: 1;
+  background: #e8dcc0;
+  line-height: 1.4;
+  overflow: hidden;
+}
+.survey-snapshot,
+.survey-live {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+.survey-snapshot[hidden],
+.survey-live[hidden] {
+  display: none;
+}
+.survey-live canvas {
+  display: block;
+}
+.survey-placeholder {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  margin: 0;
+  padding: 24px;
+  font-family: var(--hand);
+  font-size: 18px;
+  color: var(--pencil);
+  text-align: center;
+}
+.survey-zoom {
+  position: absolute;
+  right: 8px;
+  bottom: 8px;
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  padding: 4px 6px;
+  background: rgb(232 220 192 / 88%);
+  border: 1px solid var(--ink-faint);
+  font-family: var(--sans);
+  font-size: 12px;
+  color: var(--ink);
+}
+.survey-zoom .button {
+  padding: 2px 8px;
+  color: var(--ink);
+  border-color: var(--ink-soft);
+}
+.survey-tag {
+  position: absolute;
+  z-index: 2;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  padding: 4px 9px 5px;
+  transform: translate(14px, 14px) rotate(-0.8deg);
+  pointer-events: none;
+  background: #f3ead5;
+  border-top: 3px solid rgb(91 85 72 / 45%);
+  box-shadow: 0 2px 4px rgb(0 0 0 / 28%);
+  font-family: var(--hand);
+  font-size: 14px;
+  line-height: 1.35;
+  color: var(--pencil);
+  white-space: nowrap;
+}
+.survey-tag-name {
+  font-weight: 700;
+}
+.survey-hint {
+  margin-top: 6px;
+}
+.parcel-sheet {
+  margin-top: 10px;
+  padding: 12px 14px;
+  color: var(--ink);
+}
+.parcel-sheet-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 10px;
+}
+.parcel-name {
+  margin: 0;
+  font-family: var(--heading);
+  font-size: 18px;
+  letter-spacing: 0.08em;
+}
+.parcel-sheet-head .button {
+  color: var(--ink);
+  border-color: var(--ink-soft);
+}
+.parcel-content {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 6px 0 0;
+}
+.parcel-crack {
+  margin-left: 8px;
+  padding: 0 6px;
+  border-left: 3px solid var(--vermilion);
+  font-family: var(--hand);
+  color: var(--pencil);
+}
+.parcel-subtitle {
+  margin: 10px 0 4px;
+  font-family: var(--sans);
+  font-size: 12px;
+  font-weight: 400;
+  letter-spacing: 0.15em;
+  color: var(--ink-soft);
+}
+.parcel-related {
+  margin: 0;
+  padding-left: 1.2em;
+  font-size: 13px;
+}
+.parcel-notes {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.parcel-pin {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin-top: 10px;
+  font-family: var(--sans);
+  font-size: 12px;
+}
+.parcel-pin label {
+  display: flex;
+  flex: 1 1 100%;
+  flex-direction: column;
+  gap: 3px;
+  color: var(--ink-soft);
+}
+.parcel-pin input {
+  padding: 4px 6px;
+  border: 1px solid var(--ink-faint);
+  background: #f3ead5;
+  font-family: var(--hand);
+  font-size: 15px;
+  color: var(--pencil);
+}
+.parcel-pin .button {
+  color: var(--ink);
+  border-color: var(--ink-soft);
+}
+.survey-legend {
+  margin-top: 10px;
+}
+.survey-legend .map-legend {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(96px, 1fr));
+  gap: 4px 10px;
+  margin-top: 4px;
+}
+.map-legend .pictogram {
+  flex: none;
+  margin-right: 4px;
+  vertical-align: -6px;
+}
+.legend-crack {
+  color: var(--vermilion);
+}
+.desk-object .survey-legend .map-legend {
+  color: var(--ink);
+}
+.survey-live canvas {
+  width: 100% !important;
+  height: 100% !important;
+}

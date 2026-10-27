@@ -2,7 +2,7 @@
 // テンプレートパーサーの辞書・メタ命令パターンも言語依存の語彙としてここに置く。
 
 import type { Action, ParamKey, Target } from "../domain/Vocabulary";
-import type { BuildingId, Category, PolicyId } from "../domain/Buildings";
+import type { Category, PolicyId } from "../domain/Buildings";
 import type { Faction, SelectionReason, Specialty } from "../domain/Aide";
 import type { GameOverReason } from "../domain/Ending";
 import type { EventKind } from "../domain/Events";
@@ -53,27 +53,6 @@ export const messages = {
 
   /** 20 の target の名称（id は domain/Buildings.ts が単一情報源。網羅は型で保証） */
   targets: TARGET_NAMES,
-
-  /** 地図のタイルの1文字アイコン（v3.2 §2.3 のタイル列） */
-  tileGlyphs: {
-    residential: "家",
-    tenement: "長",
-    manor: "邸",
-    road: "道",
-    well: "井",
-    granary: "倉",
-    market: "市",
-    farm: "畑",
-    workshop: "工",
-    office: "旗",
-    taxoffice: "徴",
-    courthouse: "裁",
-    clinic: "医",
-    school: "学",
-    temple: "寺",
-    watchtower: "塔",
-    jail: "牢",
-  } satisfies Record<BuildingId, string>,
 
   categories: {
     housing: "住宅",
@@ -327,6 +306,35 @@ export const messages = {
         empty: "空き地",
       },
       note: "区画は役人が自動で割り振る。位置は指定できない",
+      /** 測量図（SPEC_v3.3 §5） */
+      surveying: "測量中……",
+      unavailable: "この環境では測量図を描けない",
+      title: (region: string) => `${region}村域測量図`,
+      surveyedIn: (year: number) => (year === 0 ? "着任時の測量" : `第${year}年の測量`),
+      scale: "一町",
+      scaleLabel: "縮尺",
+      north: "北",
+      marginNote: "本図は役人の測量に拠る。区画の割り振りは役人が行う",
+      crackNote: "中は空との報",
+      unsurveyed: "未測",
+      zoomLabel: (level: number, levels: number) => `拡大 ${level}／${levels}`,
+      zoomIn: "拡大",
+      zoomOut: "縮小",
+      operationHint: "ホイールで拡大・縮小、ドラッグで動かす。区画を押すと、その区画に関係する記事と報告",
+      legendTitle: "記号",
+      parcelEmpty: "空き地",
+      parcelRoad: "道（往来）",
+      parcelConstruction: (building: string) => `普請中：${building}`,
+      parcelTitle: "区画",
+      relatedTitle: "この区画に関係する記事と報告",
+      relatedNone: "関係する記事・報告は見当たらない",
+      relatedArticle: (turn: number, headline: string) => `第${turn}年の新聞「${headline}」`,
+      relatedReport: (turn: number, aide: string, line: string) => `第${turn}年 ${aide}：${line}`,
+      closeParcel: "区画を閉じる",
+      pinLabel: "この区画にメモを留める",
+      pin: "留める",
+      pinnedHere: "この区画に留めたメモ",
+      timing: (ms: number, via: "worker" | "main") => `測量 ${Math.round(ms)}ms（${via === "worker" ? "Worker" : "本体"}）`,
       worksTitle: "普請中の案件",
       noWorks: "普請中の案件はない",
       work: (building: string, count: number, repair: boolean, orderedTurn: number) =>
@@ -647,6 +655,7 @@ export const messages = {
       loose: "机の上",
       articlePlace: (turn: number, headline: string) => `第${turn}年の新聞「${headline}」`,
       letterPlace: (turn: number, aide: string) => `第${turn}年の${aide}の書簡`,
+      parcelPlace: (name: string) => `地図の区画「${name}」`,
       pinnedLabel: "留めたメモ",
       slip: "メモ",
     },
