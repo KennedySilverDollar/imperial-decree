@@ -248,6 +248,12 @@ export const LETTERS_DWELL_MS = 1200;
 export const SAVE_SCHEMA_VERSION = 2;
 export const SAVE_STORAGE_KEY = "imperial-decree/save";
 
+// --- プレイヤーのメモ（SPEC_v3.3 §7。ゲームの状態とは別に保存する：DECISIONS AA-11） ---
+/** メモ1枚の文字数の上限（コードポイントで数える。D-31 と同じ数え方） */
+export const NOTE_CHAR_LIMIT = 60;
+export const NOTES_SCHEMA_VERSION = 1;
+export const NOTES_STORAGE_KEY = "imperial-decree/notes";
+
 // --- シミュレーション（npm run sim 専用） ---
 export const SIM_GAMES = 1000;
 export const HEURISTIC_NOISE = 0.35;
