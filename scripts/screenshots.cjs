@@ -65,11 +65,30 @@ async function playTurn(page, text, { intent, capture } = {}) {
   await settle(page, 300);
 }
 
+/** 側近の書簡の封蝋を割って開く（U2：未読の書簡は封をしてある） */
+async function openLetters(page) {
+  const seals = page.locator("[data-testid^=open-letter-]:enabled");
+  while ((await seals.count()) > 0) {
+    await seals.first().click();
+    await settle(page, 150);
+  }
+}
+
+/** 新聞の二面（投書・治安・広告・天候）へめくる。二面が無ければ何もしない */
+async function toSecondPage(page) {
+  const next = page.locator("[data-testid=newspaper-next]");
+  if ((await next.count()) > 0 && (await next.isEnabled())) {
+    await next.click();
+    await settle(page, 200);
+  }
+}
+
 /** 新聞を読む（閲覧時間の計測）。投書があれば少しとどまる（投書欄の参照の計測） */
 async function readNewspaper(page) {
   if ((await page.locator("[data-testid=ending]").count()) > 0) return;
   await page.hover(".newspaper .newspaper-masthead");
   await settle(page, 300);
+  await toSecondPage(page);
   const letter = page.locator("[data-testid=news-letter]");
   if ((await letter.count()) > 0) {
     await letter.first().hover();
@@ -121,6 +140,8 @@ async function stageTriangulation(page) {
     await page.waitForSelector("[data-testid=stamp]");
     await settle(page, 400);
     await playTurn(page, "井戸を掘れ");
+    await openLetters(page);
+    await toSecondPage(page);
     const letter = await page.locator("[data-testid=news-letter]").allInnerTexts();
     const reports = await page.locator(".aide-panel").innerText();
     if (letter.some((t) => t.includes("倉庫")) && reports.includes("倉庫のうち1棟は、見かけ倒し")) return attempt;
@@ -162,6 +183,7 @@ async function stageTriangulation(page) {
     intent: { param: "infrastructure", value: 5 },
     capture: { decree: "04-decree-input", stamp: "05-stamp", result: "06-result-sheet" },
   });
+  await openLetters(page);
   await shot(page, "07-aide-reports", ".aide-panel");
   await shot(page, "08-newspaper", ".newspaper");
   await readNewspaper(page);
@@ -190,6 +212,7 @@ async function stageTriangulation(page) {
       turn++;
     }
     if (turn === 10) {
+      await openLetters(page);
       // 任命/解任：商人を解任すると候補が並ぶ（三角測量の場面で能力の高い商人が要るので、その後に行う）
       await page.click("[data-testid=aide-youngMerchant] >> text=解任する");
       await page.click("[data-testid=aide-youngMerchant] >> text=本当に解任する");
