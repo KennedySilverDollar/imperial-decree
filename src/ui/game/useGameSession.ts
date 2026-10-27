@@ -36,8 +36,18 @@ export interface GameSession {
     readonly restart: () => Promise<void>;
     readonly appoint: (candidateId: string) => Promise<void>;
     readonly dismiss: (aideId: string) => Promise<void>;
-    readonly logNewspaperRead: (reading: { issueTurn: number; dwellMs: number; articleCount: number; hasLetters: boolean }) => void;
+    readonly logNewspaperRead: (reading: {
+      issueTurn: number;
+      dwellMs: number;
+      articleCount: number;
+      hasLetters: boolean;
+      context?: "desk" | "archive";
+    }) => void;
     readonly logLettersRead: (issueTurn: number, articleIds: readonly string[], dwellMs: number) => void;
+    /** 書類を手に取って置いた（手元にあった時間） */
+    readonly logHandled: (object: string, mode: "3d" | "flat", dwellMs: number) => void;
+    readonly logLetterOpened: (aideId: string) => void;
+    readonly logNote: (event: "note.created" | "note.attached", chars: number, attachedTo: "none" | "article" | "aideReport") => void;
     readonly exportLog: () => string;
   };
 }
@@ -207,6 +217,10 @@ export function useGameSession(api: GameApi, newId: () => string = defaultId): G
       logNewspaperRead: (reading) => api.log({ event: "newspaper.read", data: { gameId: gameId.current, ...reading } }),
       logLettersRead: (issueTurn, articleIds, dwellMs) =>
         api.log({ event: "newspaper.letters", data: { gameId: gameId.current, issueTurn, articleIds, dwellMs } }),
+      logHandled: (object, mode, dwellMs) =>
+        api.log({ event: "desk.handled", data: { gameId: gameId.current, turn: game?.turn ?? 0, object, mode, dwellMs: Math.round(dwellMs) } }),
+      logLetterOpened: (aideId) => api.log({ event: "letter.opened", data: { gameId: gameId.current, turn: game?.turn ?? 0, aideId } }),
+      logNote: (event, chars, attachedTo) => api.log({ event, data: { gameId: gameId.current, turn: game?.turn ?? 0, chars, attachedTo } }),
       exportLog: api.exportLog,
     },
   };
