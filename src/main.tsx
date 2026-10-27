@@ -3,6 +3,11 @@ import "@fontsource/noto-serif-jp/400.css";
 import "@fontsource/noto-serif-jp/700.css";
 import "@fontsource/noto-sans-jp/400.css";
 import "@fontsource/noto-sans-jp/700.css";
+// 見出し（しっぽり明朝 B1）・手書き風（Klee One）・勅令の筆（Yuji Syuku）。いずれも OFL（docs/ASSETS.md）。
+// 400.css は文字の範囲ごとに分かれた woff2 を unicode-range で宣言しており、画面に出た文字の範囲だけを読み込む
+import "@fontsource/shippori-mincho-b1/400.css";
+import "@fontsource/klee-one/400.css";
+import "@fontsource/yuji-syuku/400.css";
 import "./ui/styles.css";
 import "./ui/desk/desk.css";
 import { StrictMode } from "react";
@@ -37,7 +42,7 @@ if (root) {
           envToken={import.meta.env.VITE_LLM_PROXY_TOKEN ?? ""}
         />
       ) : (
-        <App api={gameApi} settingsStorage={window.localStorage} fpsFromQuery={fpsFromQuery} adaptive={adaptive} />
+        <App api={gameApi} settingsStorage={window.localStorage} notesStorage={window.localStorage} fpsFromQuery={fpsFromQuery} adaptive={adaptive} />
       )}
     </StrictMode>,
   );

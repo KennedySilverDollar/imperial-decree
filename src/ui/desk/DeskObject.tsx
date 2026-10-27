@@ -57,7 +57,8 @@ export function DeskObject({ id, state, slot, fit, zIndex, maxHeight, onPick, on
     top: slot.top,
     width: spec.width,
     zIndex,
-    maxHeight,
+    // 俯瞰では物ごとの高さ（新聞は二つ折り）に収め、手に取ると手元の高さまで広がる
+    maxHeight: !inHand && spec.overviewMaxHeight !== undefined ? Math.min(maxHeight, spec.overviewMaxHeight) : maxHeight,
     transform: inHand ? "none" : placed.transform,
     transformOrigin: placed.transformOrigin,
     "--shadow": shadow.box,

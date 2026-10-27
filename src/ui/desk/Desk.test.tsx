@@ -1,10 +1,8 @@
 // @vitest-environment jsdom
-import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { cleanup, fireEvent, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
-import type { GameState } from "../../domain/GameState";
-import { makeTestGameApi, playedState } from "../../test/gameApi";
-import { App } from "../App";
-import { DEFAULT_SETTINGS, SETTINGS_STORAGE_KEY, type Settings } from "../settings/settings";
+import { INFO_OBJECTS, object, press, readable, readAll, renderDesk, underPerspective, WRITABLE } from "../../test/deskHarness";
+import { playedState } from "../../test/gameApi";
 import { DESK_PERSPECTIVE_PX } from "./deskConstants";
 
 // 地図は Phaser（canvas）で描くが、jsdom には canvas が無いので Phaser だけ差し替える。地図の文字情報（凡例・普請中）は DOM なので比べられる。
@@ -28,65 +26,6 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
-/** 机に載っている情報（入力欄はその値、選択肢は選んでいるもの）。飾り（aria-hidden）は除く */
-const readable = (root: Element): string => {
-  const parts: string[] = [];
-  const walk = (node: Node) => {
-    if (node.nodeType === Node.TEXT_NODE) {
-      parts.push(node.textContent ?? "");
-      return;
-    }
-    if (!(node instanceof HTMLElement)) return;
-    if (node.getAttribute("aria-hidden") === "true") return;
-    if (node instanceof HTMLTextAreaElement || node instanceof HTMLInputElement) {
-      parts.push(`[${node.value}]`);
-      return;
-    }
-    if (node instanceof HTMLSelectElement) {
-      parts.push(`[${node.selectedOptions[0]?.textContent ?? ""}]`);
-      return;
-    }
-    node.childNodes.forEach(walk);
-  };
-  walk(root);
-  return parts.join(" ").replace(/\s+/g, " ").trim();
-};
-
-/** 情報を持つ書類（ランプは飾り） */
-const INFO_OBJECTS = ["ledger", "map", "letters", "newspaper", "result", "decree", "stamp"] as const;
-
-const storageWith = (settings: Partial<Settings>) => {
-  const data = new Map<string, string>([[SETTINGS_STORAGE_KEY, JSON.stringify({ ...DEFAULT_SETTINGS, ...settings })]]);
-  return { getItem: (k: string) => data.get(k) ?? null, setItem: (k: string, v: string) => void data.set(k, v) };
-};
-
-const renderDesk = async (settings: Partial<Settings>, saved: GameState | null = null) => {
-  const api = makeTestGameApi({ saved, seed: 11 });
-  const view = render(<App api={api} settingsStorage={storageWith(settings)} fpsFromQuery={false} />);
-  await screen.findByTestId("year");
-  await act(async () => {}); // 任命候補の読み込みを待つ
-  return { api, ...view };
-};
-
-const object = (id: string): HTMLElement => {
-  const el = document.querySelector<HTMLElement>(`[data-object="${id}"]`);
-  if (el === null) throw new Error(`机に ${id} が無い`);
-  return el;
-};
-
-type InfoId = (typeof INFO_OBJECTS)[number];
-const readAll = (): Record<InfoId, string> => Object.fromEntries(INFO_OBJECTS.map((id) => [id, readable(object(id))])) as Record<InfoId, string>;
-
-const press = (key: string, target: Element = document.body) => fireEvent.keyDown(target, { key });
-
-/** 祖先まで含めて、遠近の変形が掛かっていないか（インラインの transform を見る。CSS の傾きは手元・平面では外している） */
-const underPerspective = (el: Element): boolean => {
-  for (let node: Element | null = el; node !== null; node = node.parentElement) {
-    if (node instanceof HTMLElement && node.style.transform.includes("perspective")) return true;
-  }
-  return false;
-};
-
 describe("表示される情報は、平面モードと立体の机で同じ", () => {
   it("俯瞰の机と平面の机で、各書類の中身が一致する（勅令用紙は手元で比べる）", async () => {
     const saved = await playedState(7, ["道を造れ", "家を建てよ"]);
@@ -97,7 +36,7 @@ describe("表示される情報は、平面モードと立体の机で同じ", (
 
     await renderDesk({ flat: false }, saved);
     const overview = readAll();
-    for (const id of INFO_OBJECTS.filter((id) => id !== "decree")) expect(overview[id], id).toBe(flat[id]);
+    for (const id of INFO_OBJECTS.filter((id) => !(WRITABLE as readonly string[]).includes(id))) expect(overview[id], id).toBe(flat[id]);
     expect(flat.newspaper.length).toBeGreaterThan(50);
     expect(flat.result).toContain("顛末");
 
@@ -106,6 +45,8 @@ describe("表示される情報は、平面モードと立体の机で同じ", (
     press("4");
     expect(readable(object("decree"))).toBe(flat.decree);
     expect(readable(object("stamp"))).toBe(flat.stamp);
+    press("7");
+    expect(readable(object("notepad"))).toBe(flat.notepad);
   });
 
   it("書きかけは俯瞰の紙にも同じ文面・残り字数で写る", async () => {

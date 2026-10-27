@@ -5,16 +5,18 @@ const key = (k: string, partial: Partial<KeyInput> = {}): KeyInput => ({ key: k,
 const ctx = (partial: Partial<KeyContext> = {}): KeyContext => ({ mode: "3d", focused: null, animating: false, ...partial });
 
 describe("キーボード操作（SPEC_v3.3 §4.7）", () => {
-  it("1〜6 で地図・新聞・書簡・勅令用紙・台帳・結果束を手に取る（7 のメモ帳は U4）", () => {
-    expect(["1", "2", "3", "4", "5", "6"].map((k) => commandForKey(key(k), ctx()))).toEqual([
+  it("1〜7 で地図・新聞・書簡・勅令用紙・台帳・結果束・メモ帳を、8 で既決箱を手に取る", () => {
+    expect(["1", "2", "3", "4", "5", "6", "7", "8"].map((k) => commandForKey(key(k), ctx()))).toEqual([
       { kind: "pickUp", id: "map" },
       { kind: "pickUp", id: "newspaper" },
       { kind: "pickUp", id: "letters" },
       { kind: "pickUp", id: "decree" },
       { kind: "pickUp", id: "ledger" },
       { kind: "pickUp", id: "result" },
+      { kind: "pickUp", id: "notepad" },
+      { kind: "pickUp", id: "archive" },
     ]);
-    expect(commandForKey(key("7"), ctx())).toBeNull();
+    expect(commandForKey(key("9"), ctx())).toBeNull();
   });
 
   it("文字の入力中は横取りしない（Esc を除く）。IME 変換中は Esc も", () => {
@@ -44,10 +46,13 @@ describe("キーボード操作（SPEC_v3.3 §4.7）", () => {
     expect(commandForKey(key("Tab"), ctx({ mode: "flat", focused: "newspaper" }))).toBeNull();
   });
 
-  it("← → は結果の書類束をめくる", () => {
+  it("← → は手元の紙面・書類束・台帳・既決箱の書類をめくる", () => {
     expect(commandForKey(key("ArrowLeft"), ctx({ focused: "result" }))).toEqual({ kind: "page", delta: -1 });
-    expect(commandForKey(key("ArrowRight"), ctx({ focused: "result" }))).toEqual({ kind: "page", delta: 1 });
-    expect(commandForKey(key("ArrowRight"), ctx({ focused: "newspaper" }))).toBeNull();
+    for (const focused of ["newspaper", "ledger", "archive"] as const) {
+      expect(commandForKey(key("ArrowRight"), ctx({ focused }))).toEqual({ kind: "page", delta: 1 });
+    }
+    expect(commandForKey(key("ArrowRight"), ctx({ focused: "map" }))).toBeNull();
+    expect(commandForKey(key("ArrowRight"), ctx({ focused: "notepad" }))).toBeNull();
   });
 
   it("Enter は勅令用紙が手元にあるときに判を押す", () => {

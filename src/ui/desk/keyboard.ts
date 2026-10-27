@@ -1,4 +1,4 @@
-import { PICK_KEYS, SIDE_BY_SIDE_READERS, type PickableId } from "./objects";
+import { PAGED_OBJECTS, PICK_KEYS, SIDE_BY_SIDE_READERS, type PickableId } from "./objects";
 
 // キーボード操作（SPEC_v3.3 §4.7）。キーと状況から「何をするか」だけを決める純粋関数。
 // 文字を打っている最中（入力欄・IME 変換中）は、Esc 以外は横取りしない。
@@ -44,9 +44,9 @@ export const commandForKey = (input: KeyInput, ctx: KeyContext): KeyCommand | nu
     case "Tab":
       return ctx.mode === "3d" && ctx.focused !== null && SIDE_BY_SIDE_READERS.includes(ctx.focused) ? { kind: "toggleSideBySide" } : null;
     case "ArrowLeft":
-      return ctx.focused === "result" ? { kind: "page", delta: -1 } : null;
+      return ctx.focused !== null && PAGED_OBJECTS.includes(ctx.focused) ? { kind: "page", delta: -1 } : null;
     case "ArrowRight":
-      return ctx.focused === "result" ? { kind: "page", delta: 1 } : null;
+      return ctx.focused !== null && PAGED_OBJECTS.includes(ctx.focused) ? { kind: "page", delta: 1 } : null;
     case "Enter":
       return ctx.focused === "decree" ? { kind: "stamp" } : null;
     default:

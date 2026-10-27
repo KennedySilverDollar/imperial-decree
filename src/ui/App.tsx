@@ -1,6 +1,7 @@
 import { Desk } from "./desk/Desk";
 import type { GameApi } from "./game/GameApi";
 import { useGameSession } from "./game/useGameSession";
+import type { NotesStorage } from "./notes/notesStorage";
 import { useSettings, useSystemReducedMotion, type SettingsStorage } from "./settings/settings";
 
 // 画面全体。ゲームの進行は useGameSession（TurnMachine へのアダプタ）、描画は Desk。
@@ -9,12 +10,14 @@ import { useSettings, useSystemReducedMotion, type SettingsStorage } from "./set
 interface Props {
   readonly api: GameApi;
   readonly settingsStorage: SettingsStorage | null;
+  /** メモの保存先（ゲームのセーブとは別のキー） */
+  readonly notesStorage?: NotesStorage | null;
   readonly fpsFromQuery: boolean;
   /** 性能の自動調整（SPEC_v3.3 §9）。計測のときだけ止める */
   readonly adaptive?: boolean;
 }
 
-export function App({ api, settingsStorage, fpsFromQuery, adaptive = true }: Props) {
+export function App({ api, settingsStorage, notesStorage = null, fpsFromQuery, adaptive = true }: Props) {
   const session = useGameSession(api);
   const [settings, updateSettings] = useSettings(settingsStorage);
   const systemReducedMotion = useSystemReducedMotion();
@@ -26,6 +29,7 @@ export function App({ api, settingsStorage, fpsFromQuery, adaptive = true }: Pro
       systemReducedMotion={systemReducedMotion}
       fpsFromQuery={fpsFromQuery}
       adaptive={adaptive}
+      notesStorage={notesStorage}
     />
   );
 }

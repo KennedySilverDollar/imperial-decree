@@ -238,8 +238,8 @@ export const LOG_STORAGE_KEY = "imperial-decree/log";
 export const LOG_MAX_ENTRIES = 5000;
 
 // --- UI 演出 ---
-/** 判子アニメの長さ（SPEC §12.8：簡易1秒） */
-export const STAMP_ANIMATION_MS = 1000;
+/** 押印の所作の長さ：持ち上げ→朱肉→押す（SPEC_v3.3 §4.3「約1.2秒」。v3.0 §12.8 の簡易1秒を置き換え） */
+export const STAMP_ANIMATION_MS = 1200;
 export const PAPER_FADE_MS = 400;
 /** 投書欄の記事にこれだけとどまったら「参照した」と数える（v3.2 §3.2 の計測） */
 export const LETTERS_DWELL_MS = 1200;
