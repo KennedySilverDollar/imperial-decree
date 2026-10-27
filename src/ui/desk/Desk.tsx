@@ -1,5 +1,8 @@
 import { useEffect, useReducer, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import { DECREE_POLITICAL_COST } from "../../domain/constants";
+import { addNote, attachNote, notesAttachedTo, noteLength, type NoteAttachment, type PlayerNote } from "../../domain/PlayerNotes";
+import type { TurnRecord } from "../../domain/TurnRecord";
+import { aideName } from "../../i18n/messages";
 import { messages } from "../../i18n/messages";
 import { FpsOverlay } from "../dev/FpsOverlay";
 import { useFpsMonitor } from "../dev/fps";
@@ -9,13 +12,16 @@ import { DecreePanel } from "../panels/DecreePanel";
 import { EndingScreen } from "../panels/EndingScreen";
 import { LedgerPanel } from "../panels/LedgerPanel";
 import { MapPanel } from "../panels/MapPanel";
-import { NewspaperPanel } from "../panels/NewspaperPanel";
+import { ArchivePanel } from "../panels/ArchivePanel";
+import { NewspaperPanel, newspaperPages } from "../panels/NewspaperPanel";
+import { NotepadPanel, targetKeyOf, type NoteTarget } from "../panels/NotepadPanel";
+import { usePlayerNotes, type NotesStorage } from "../notes/notesStorage";
 import { ResultStack, sheetCountOf } from "../panels/ResultStack";
 import { resolveReducedMotion, type Settings } from "../settings/settings";
 import { SettingsPanel } from "../settings/SettingsPanel";
 import { checkDraft } from "./decreeDraft";
 import { HEADER_HEIGHT_PX, TEXT_SCALES } from "./deskConstants";
-import { deskReducer, freshResultView, initialDeskState, sheetKey } from "./deskState";
+import { deskReducer, freshResultView, initialDeskState, letterKey, pageKey, sheetKey } from "./deskState";
 import { DeskStage } from "./DeskStage";
 import { FlatDesk } from "./FlatDesk";
 import { commandForKey, keyTargetOf, type KeyCommand } from "./keyboard";
@@ -48,9 +54,16 @@ interface Props {
   readonly fpsFromQuery: boolean;
   /** 45fps を下回り続けたら演出を切る（§9） */
   readonly adaptive: boolean;
+  /** メモの保存先（ゲームのセーブとは別のキー。DECISIONS AA-11） */
+  readonly notesStorage: NotesStorage | null;
 }
 
-export function Desk({ session, settings, onSettings, systemReducedMotion, fpsFromQuery, adaptive }: Props) {
+/** 新聞の面の数（第一面と二面） */
+const newspaperPageCount = (record: TurnRecord): number => newspaperPages(record.newspaper.articles.map((a) => ({ sectionId: a.section }))).length;
+
+const attachmentKind = (a: NoteAttachment | null): "none" | "article" | "aideReport" => (a === null ? "none" : a.kind);
+
+export function Desk({ session, settings, onSettings, systemReducedMotion, fpsFromQuery, adaptive, notesStorage }: Props) {
   const { game, phase, lastRecord, map, candidates, error, actions } = session;
   const [desk, dispatch] = useReducer(deskReducer, "", initialDeskState);
   const [settingsOpen, setSettingsOpen] = useState(false);
@@ -58,6 +71,7 @@ export function Desk({ session, settings, onSettings, systemReducedMotion, fpsFr
   const [lowPower, setLowPower] = useState(false);
   const [instant, setInstant] = useState(false);
   const stage = useStageSize();
+  const [notes, updateNotes] = usePlayerNotes(notesStorage, game?.saveId ?? null);
   const stampTimer = useRef<number | null>(null);
   const pendingStamp = useRef<(() => void) | null>(null);
   const transitionUntil = useRef(0);
@@ -94,6 +108,17 @@ export function Desk({ session, settings, onSettings, systemReducedMotion, fpsFr
   useEffect(() => {
     transitionUntil.current = performance.now() + timings.focusMs;
   }, [desk.focused, desk.sideBySide, timings.focusMs]);
+
+  // 手に取った回数と手元にあった時間（§13.2）：置いた・持ち替えたときに、前に持っていた物を記録する
+  const held = useRef<{ id: PickableId; since: number } | null>(null);
+  const logHandled = useRef(actions.logHandled);
+  logHandled.current = actions.logHandled;
+  useEffect(() => {
+    const now = performance.now();
+    const previous = held.current;
+    if (previous !== null && previous.id !== desk.focused) logHandled.current(previous.id, mode, now - previous.since);
+    if (desk.focused !== previous?.id) held.current = desk.focused === null ? null : { id: desk.focused, since: now };
+  }, [desk.focused, mode]);
 
   useEffect(
     () => () => {
@@ -152,6 +177,40 @@ export function Desk({ session, settings, onSettings, systemReducedMotion, fpsFr
     stampTimer.current = window.setTimeout(finishStamp, timings.stampMs);
   };
 
+  /** ← →：手元の書類をめくる */
+  const page = (delta: -1 | 1) => {
+    if (game === null) return;
+    switch (desk.focused) {
+      case "result":
+        if (lastRecord !== null && resultView !== null) {
+          dispatch({ type: "flip", turn: lastRecord.turn, to: resultView.top + delta, sheetCount: sheetCountOf(lastRecord) });
+        }
+        return;
+      case "newspaper":
+        if (lastRecord !== null) {
+          const key = pageKey.newspaper(lastRecord.newspaper.turn);
+          dispatch({ type: "page", key, to: (desk.pages[key] ?? 0) + delta, count: newspaperPageCount(lastRecord) });
+        }
+        return;
+      case "ledger": {
+        const count = game.history.length + 1;
+        dispatch({ type: "page", key: pageKey.ledger, to: (desk.pages[pageKey.ledger] ?? count - 1) + delta, count });
+        return;
+      }
+      case "archive": {
+        const { turn, doc } = desk.archive;
+        const record = game.history.find((r) => r.turn === turn);
+        if (record === undefined || doc === "letters") return;
+        const key = pageKey.archive(record.turn, doc);
+        const count = doc === "result" ? sheetCountOf(record) : newspaperPageCount(record);
+        dispatch({ type: "page", key, to: (desk.pages[key] ?? 0) + delta, count });
+        return;
+      }
+      default:
+        return;
+    }
+  };
+
   const skip = () => {
     if (pendingStamp.current !== null) finishStamp();
     setInstant(true);
@@ -167,10 +226,7 @@ export function Desk({ session, settings, onSettings, systemReducedMotion, fpsFr
       case "toggleSideBySide":
         return dispatch({ type: "toggleSideBySide" });
       case "page":
-        if (lastRecord !== null && resultView !== null) {
-          dispatch({ type: "flip", turn: lastRecord.turn, to: resultView.top + command.delta, sheetCount: sheetCountOf(lastRecord) });
-        }
-        return;
+        return page(command.delta);
       case "stamp":
         return stamp();
       case "skip":
@@ -204,12 +260,58 @@ export function Desk({ session, settings, onSettings, systemReducedMotion, fpsFr
   const ui = messages.ui;
   const objects = DESK_OBJECT_IDS.filter((id) => id !== "result" || lastRecord !== null);
 
+  // メモ：留め先・留めたメモ・ちぎる（LLM にも新聞にも渡さない。セーブとは別に保存するだけ）
+  const articleNotes = (turn: number, articleId: string): readonly PlayerNote[] =>
+    notes === null ? [] : notesAttachedTo(notes, { kind: "article", turn, articleId });
+  const letterNotes = (turn: number, aideId: string): readonly PlayerNote[] =>
+    notes === null ? [] : notesAttachedTo(notes, { kind: "aideReport", turn, aideId });
+  const noteTargets: readonly NoteTarget[] =
+    lastRecord === null
+      ? []
+      : [
+          ...lastRecord.newspaper.articles.map((a) => {
+            const attachment: NoteAttachment = { kind: "article", turn: lastRecord.newspaper.turn, articleId: a.id };
+            return { key: targetKeyOf(attachment), label: ui.notes.articlePlace(attachment.turn, a.headline), attachment };
+          }),
+          ...lastRecord.aideReports.map((r) => {
+            const attachment: NoteAttachment = { kind: "aideReport", turn: lastRecord.turn, aideId: r.aideId };
+            return { key: targetKeyOf(attachment), label: ui.notes.letterPlace(attachment.turn, aideName(r.aideId)), attachment };
+          }),
+        ];
+  const placeOf = (a: NoteAttachment | null): string => {
+    if (a === null) return ui.notes.loose;
+    const record = game.history.find((r) => r.turn === a.turn);
+    if (a.kind === "aideReport") return ui.notes.letterPlace(a.turn, aideName(a.aideId));
+    const article = record?.newspaper.articles.find((x) => x.id === a.articleId);
+    return ui.notes.articlePlace(a.turn, article?.headline ?? a.articleId);
+  };
+  const tearNote = (text: string, attachment: NoteAttachment | null) =>
+    updateNotes((current) => {
+      const next = addNote(current, { id: crypto.randomUUID(), text, turnCreated: game.turn, attachedTo: attachment });
+      if (next.issue === null) actions.logNote("note.created", noteLength(text.trim()), attachmentKind(attachment));
+      return next.notes;
+    });
+  const moveNote = (id: string, attachment: NoteAttachment | null) => {
+    const note = notes?.notes.find((n) => n.id === id);
+    updateNotes((current) => attachNote(current, id, attachment));
+    actions.logNote("note.attached", noteLength(note?.text ?? ""), attachmentKind(attachment));
+  };
+
   const render = (id: DeskObjectId, interactive: boolean): ReactNode => {
     switch (id) {
       case "lamp":
         return <Lamp />;
       case "ledger":
-        return <LedgerPanel params={game.params} delta={lastRecord?.actualResult ?? null} politicalCapital={game.politicalCapital} />;
+        return (
+          <LedgerPanel
+            params={game.params}
+            politicalCapital={game.politicalCapital}
+            history={game.history}
+            page={desk.pages[pageKey.ledger] ?? null}
+            onPage={(to, count) => dispatch({ type: "page", key: pageKey.ledger, to, count })}
+            interactive={interactive}
+          />
+        );
       case "map":
         return (
           <MapPanel
@@ -225,12 +327,61 @@ export function Desk({ session, settings, onSettings, systemReducedMotion, fpsFr
             candidates={candidates}
             politicalCapital={game.politicalCapital}
             disabled={busy || !interactive}
+            canOpen={interactive}
+            opened={(aideId) => lastRecord !== null && desk.opened.includes(letterKey(lastRecord.turn, aideId))}
+            onOpen={(aideId) => {
+              if (lastRecord === null) return;
+              dispatch({ type: "openLetter", key: letterKey(lastRecord.turn, aideId) });
+              actions.logLetterOpened(aideId);
+            }}
+            notesFor={(aideId) => (lastRecord === null ? [] : letterNotes(lastRecord.turn, aideId))}
             onAppoint={(candidateId) => void actions.appoint(candidateId)}
             onDismiss={(aideId) => void actions.dismiss(aideId)}
           />
         );
       case "newspaper":
-        return <NewspaperPanel newspaper={lastRecord?.newspaper ?? null} onRead={actions.logNewspaperRead} onLettersRead={actions.logLettersRead} />;
+        return (
+          <NewspaperPanel
+            newspaper={lastRecord?.newspaper ?? null}
+            page={lastRecord === null ? 0 : (desk.pages[pageKey.newspaper(lastRecord.newspaper.turn)] ?? 0)}
+            onPage={(to, count) => lastRecord !== null && dispatch({ type: "page", key: pageKey.newspaper(lastRecord.newspaper.turn), to, count })}
+            interactive={interactive}
+            notesFor={(articleId) => (lastRecord === null ? [] : articleNotes(lastRecord.newspaper.turn, articleId))}
+            onRead={(reading) => actions.logNewspaperRead({ ...reading, context: "desk" })}
+            onLettersRead={actions.logLettersRead}
+          />
+        );
+      case "notepad":
+        return notes === null ? null : (
+          <NotepadPanel
+            notes={notes}
+            draft={desk.noteDraft}
+            onDraft={(draft) => dispatch({ type: "noteDraft", draft })}
+            targets={noteTargets}
+            placeOf={placeOf}
+            onTear={tearNote}
+            onAttach={moveNote}
+            interactive={interactive}
+          />
+        );
+      case "archive": {
+        const { turn, doc } = desk.archive;
+        return (
+          <ArchivePanel
+            history={game.history}
+            turn={turn}
+            doc={doc}
+            onSelect={(t, d) => dispatch({ type: "archive", turn: t, doc: d })}
+            page={turn === null ? 0 : (desk.pages[pageKey.archive(turn, doc)] ?? 0)}
+            onPage={(to, count) => turn !== null && dispatch({ type: "page", key: pageKey.archive(turn, doc), to, count })}
+            interactive={interactive}
+            articleNotes={articleNotes}
+            letterNotes={letterNotes}
+            onRead={(reading) => actions.logNewspaperRead({ ...reading, context: "archive" })}
+            onLettersRead={actions.logLettersRead}
+          />
+        );
+      }
       case "result":
         return lastRecord === null ? null : (
           <ResultStack

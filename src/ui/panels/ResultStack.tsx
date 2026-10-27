@@ -1,21 +1,31 @@
-import type { ReactNode } from "react";
+import { useRef, useState, type PointerEvent as ReactPointerEvent, type ReactNode } from "react";
 import type { DecreeIntent } from "../../domain/DecreeIntent";
 import type { TurnRecord } from "../../domain/TurnRecord";
 import { PARAM_KEYS } from "../../domain/Vocabulary";
 import { buildThreeTierView, renderEventNote, renderExecutionNote, renderThreeTier } from "../../engine/ResultView";
 import { aideName, messages } from "../../i18n/messages";
 
-// 3段表示＋意図比較（SPEC §6.5, §12.6）：書類が重なり、めくると下層が見える。差分は朱色の訂正線。
+// 3段表示＋意図比較（SPEC §6.5, §12.6 / SPEC_v3.3 §4.4）：紐で綴じた書類の束。上から
+// 「参謀の解釈 / 側近による補正 / 実際の結果 / 意図比較（宣言時のみ）」。クリックかドラッグで1枚ずつめくる。
+// 差分は朱の訂正線と書き込みに「訂」の印を添える（色だけに頼らない・不変条件24）。
 
 const r = messages.ui.result;
 
-/** 朱色の訂正線：元の値に線を引き、横に直した値を書く */
+/** 横にこれだけ引いたら1枚めくる（px） */
+const DRAG_FLIP_PX = 70;
+/** これより動かなければクリックと見なす（px） */
+const CLICK_SLOP_PX = 6;
+
+/** 朱色の訂正線：元の値に線を引き、横に直した値を書き、「訂」の印を添える */
 function Correction({ label, from, to }: { readonly label: string; readonly from: string; readonly to: string }) {
   return (
     <p className="correction">
       <span className="correction-label">{label}</span>
       <del className="struck">{from}</del>
       <ins className="amended">{to}</ins>
+      <span className="correction-mark" role="img" aria-label={r.correctionMark}>
+        {r.correctionMarkGlyph}
+      </span>
     </p>
   );
 }
@@ -128,15 +138,22 @@ const buildSheets = (record: TurnRecord): readonly Sheet[] => {
   });
 
   if (text.intentComparison !== null) {
+    const achieved = record.intentEvaluation?.achieved ?? false;
     sheets.push({
       key: "intent",
       title: messages.threeTier.intentComparison,
       memo: true,
-      body: text.intentComparison.map((line, i) => (
-        <p key={i} className="pencil">
-          {line}
-        </p>
-      )),
+      body: (
+        <>
+          {/* 鉛筆の走り書き：達成は小さな丸、未達は斜線（印と言葉の両方で） */}
+          <span className={`intent-mark ${achieved ? "is-achieved" : "is-missed"}`} role="img" aria-label={achieved ? r.achievedMark : r.missedMark} />
+          {text.intentComparison.map((line, i) => (
+            <p key={i} className="pencil">
+              {line}
+            </p>
+          ))}
+        </>
+      ),
     });
   }
   return sheets;
@@ -149,30 +166,71 @@ interface Props {
   /** いま一番上の紙（めくり位置は机の UI ストアが持つ） */
   readonly top: number;
   readonly onFlip: (to: number, sheetCount: number) => void;
-  /** 手元にある（めくれる・机に戻せる）か */
+  /** 手元にある（めくれる）か */
   readonly inHand: boolean;
-  readonly onClose: () => void;
+  /** 机に戻すボタンを出すとき（届いた束を手に持っているとき）。既決箱の束には出さない */
+  readonly onClose?: () => void;
+  /** 既決箱から取り出した束（届いた束の目印 result-sheets / flip を付けない） */
+  readonly archived?: boolean;
 }
 
-// 結果の書類束（SPEC_v3.3 §4.4）。手元にあるときだけ、めくる・机に戻すの操作と計測用の目印を出す。
-export function ResultStack({ record, top, onFlip, inHand, onClose }: Props) {
+// 結果の書類束（SPEC_v3.3 §4.4）。手元にあるときだけめくれる。いちばん上の紙はクリックで次へ、
+// 左へ引けば次へ・右へ引けば前へ。めくった紙は束の裏へ回る。
+export function ResultStack({ record, top, onFlip, inHand, onClose, archived = false }: Props) {
   const sheets = buildSheets(record);
-  const go = (next: number) => onFlip(next, sheets.length);
+  const marked = inHand && !archived;
+  const go = (next: number) => {
+    if (next >= 0 && next < sheets.length && next !== top) onFlip(next, sheets.length);
+  };
+  const [drag, setDrag] = useState(0);
+  const start = useRef<{ x: number; id: number } | null>(null);
+
+  const onPointerDown = (e: ReactPointerEvent<HTMLElement>) => {
+    if (!inHand || e.button !== 0) return;
+    start.current = { x: e.clientX, id: e.pointerId };
+    e.currentTarget.setPointerCapture?.(e.pointerId);
+  };
+  const onPointerMove = (e: ReactPointerEvent<HTMLElement>) => {
+    if (start.current !== null && start.current.id === e.pointerId) setDrag(e.clientX - start.current.x);
+  };
+  const onPointerUp = (e: ReactPointerEvent<HTMLElement>) => {
+    const s = start.current;
+    start.current = null;
+    if (s === null || s.id !== e.pointerId) return;
+    const dx = e.clientX - s.x;
+    setDrag(0);
+    if (Math.abs(dx) < CLICK_SLOP_PX) go(top + 1);
+    else if (dx <= -DRAG_FLIP_PX) go(top + 1);
+    else if (dx >= DRAG_FLIP_PX) go(top - 1);
+  };
 
   return (
     <div className="result-stack" aria-label={r.heading(record.turn)}>
       <h2 className="result-heading">{r.heading(record.turn)}</h2>
-      <div className="sheets" data-testid={inHand ? "result-sheets" : undefined}>
+      <div className="sheets bound" data-testid={marked ? "result-sheets" : undefined}>
+        <span className="binding-cord" aria-hidden />
         {sheets.map((sheet, index) => {
           const offset = index - top;
           const state = offset < 0 ? "flipped" : offset === 0 ? "current" : "under";
+          const dragging = state === "current" && drag !== 0;
           return (
             <article
               key={sheet.key}
-              className={`paper sheet sheet-${state} ${sheet.memo ? "memo" : ""}`}
-              style={{ zIndex: sheets.length - index, ["--depth" as string]: Math.max(0, offset) }}
+              className={`paper sheet sheet-${state} ${sheet.memo ? "memo" : ""} ${dragging ? "is-dragging" : ""}`}
+              style={{
+                zIndex: sheets.length - index,
+                ["--depth" as string]: Math.max(0, offset),
+                ...(dragging ? { transform: `translateX(${drag}px) rotate(${(drag / 40).toFixed(2)}deg)` } : {}),
+              }}
               aria-hidden={state !== "current"}
               onClick={() => inHand && state === "under" && go(index)}
+              onPointerDown={state === "current" ? onPointerDown : undefined}
+              onPointerMove={state === "current" ? onPointerMove : undefined}
+              onPointerUp={state === "current" ? onPointerUp : undefined}
+              onPointerCancel={() => {
+                start.current = null;
+                setDrag(0);
+              }}
             >
               <h3 className="sheet-title">{sheet.title}</h3>
               <div className="sheet-body">{sheet.body}</div>
@@ -185,15 +243,16 @@ export function ResultStack({ record, top, onFlip, inHand, onClose }: Props) {
           {r.back}
         </button>
         <span className="sheet-count">{r.sheetOf(top + 1, sheets.length)}</span>
-        <button className="button" disabled={!inHand || top >= sheets.length - 1} onClick={() => go(top + 1)} data-testid={inHand ? "flip" : undefined}>
+        <button className="button" disabled={!inHand || top >= sheets.length - 1} onClick={() => go(top + 1)} data-testid={marked ? "flip" : undefined}>
           {r.flip}
         </button>
-        {inHand && (
+        {inHand && onClose !== undefined && (
           <button className="button primary" onClick={onClose} data-testid="close-result">
             {r.close}
           </button>
         )}
       </div>
+      {inHand && <p className="sheet-hint">{r.flipHint}</p>}
     </div>
   );
 }

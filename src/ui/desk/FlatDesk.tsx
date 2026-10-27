@@ -4,7 +4,8 @@ import type { DeskUiState } from "./deskState";
 import type { DeskObjectId, PickableId } from "./objects";
 
 // 平面モード（SPEC_v3.3 §9）：机を真上から見た配置で、書類を平らなパネルとして並べる。変形は一切ない。
-// 並びは立体の机の置き場に合わせる：左に台帳と新聞、中央に地図と勅令用紙＋判子、右に側近の書簡と結果の書類束。
+// 並びは立体の机の置き場に合わせる：上に台帳、左に新聞、中央に地図と勅令用紙＋判子、右に側近の書簡・結果の書類束・メモ帳、
+// 下の端に既決箱。
 // 結果の書類束は、届いた年（手元にあるとき）だけ机の上に重ねて出す。ランプは飾りなので出さない。
 
 interface Props {
@@ -56,8 +57,11 @@ export function FlatDesk({ objects, render, desk, onPick, onPutDown }: Props) {
           {slot("letters")}
           {/* 机の上の束は、クリックでもう一度手に取って読み返せる */}
           {!resultInHand && slot("result", () => onPick("result"))}
+          {slot("notepad")}
         </div>
       </div>
+      {/* 既決箱は机の端：取り出した書類（新聞など）を広げられるよう、幅いっぱいに置く */}
+      {slot("archive")}
       {resultInHand && (
         <div
           className="overlay fade-in"

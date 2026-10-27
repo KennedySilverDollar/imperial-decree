@@ -58,7 +58,24 @@ export type KpiEvent =
         readonly dwellMs: number;
         readonly articleCount: number;
         readonly hasLetters: boolean;
+        /** 机の上の今の号か、既決箱から取り出した過去の号か（SPEC_v3.3 §3.2。無ければ机の上） */
+        readonly context?: "desk" | "archive";
       };
+    }
+  | {
+      /** 書類を手に取って置いた（SPEC_v3.3 §13.2：手に取った回数と手元での滞在時間） */
+      readonly event: "desk.handled";
+      readonly data: { readonly gameId: string; readonly turn: number; readonly object: string; readonly mode: "3d" | "flat"; readonly dwellMs: number };
+    }
+  | {
+      /** 側近書簡の封蝋を割った（未読の書簡を開いた） */
+      readonly event: "letter.opened";
+      readonly data: { readonly gameId: string; readonly turn: number; readonly aideId: string };
+    }
+  | {
+      /** メモをちぎった・留め先を変えた（SPEC_v3.3 §7・§13.2：作成数と留め先の分布） */
+      readonly event: "note.created" | "note.attached";
+      readonly data: { readonly gameId: string; readonly turn: number; readonly chars: number; readonly attachedTo: "none" | "article" | "aideReport" };
     }
   | {
       readonly event: "newspaper.letters";

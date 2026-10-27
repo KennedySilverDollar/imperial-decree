@@ -514,3 +514,796 @@
 .fps-low {
   color: #e2b6a8;
 }
+
+/* =====================================================================
+   U2：書類の作り込み（SPEC_v3.3 §3.2・§4.2〜§4.4・§6・§7・§8.3）
+   ===================================================================== */
+
+/* 書体（§8.3）：本文は Noto のまま。見出しはしっぽり明朝 B1、手書きは Klee One、勅令の筆は Yuji Syuku */
+:root {
+  --heading: "Shippori Mincho B1", var(--serif);
+  --hand: "Klee One", var(--serif);
+  --brush: "Yuji Syuku", "Noto Serif JP", serif;
+}
+
+.newspaper-masthead,
+.newspaper-headline,
+.newspaper-subhead,
+.ledger-title,
+.ledger-year,
+.ledger-subtitle,
+.result-heading,
+.sheet-title,
+.archive .panel-title,
+.ending-headline {
+  font-family: var(--heading);
+}
+
+.report-letter,
+.envelope-front,
+.intent-margin,
+.pencil,
+.note-text,
+.torn-note,
+.pinned-note,
+.trend-label,
+.sheet-hint {
+  font-family: var(--hand);
+}
+
+/* ---------- 勅令用紙：付箋・筆の文字・右下の残り字数 ---------- */
+.decree-sheet {
+  padding-top: 46px;
+  padding-bottom: 40px;
+}
+
+/* 上辺の付箋（タグ）。貼っていない付箋は縁に薄く控える。傾けない（入力欄なので。不変条件25） */
+.sticky-row {
+  position: absolute;
+  top: 6px;
+  left: 22px;
+  right: 22px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.sticky {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 8px 4px;
+  font-family: var(--sans);
+  font-size: 12px;
+  color: var(--ink);
+  border-bottom: 1px solid rgb(43 29 14 / 15%);
+  box-shadow: 0 2px 3px rgb(0 0 0 / 18%);
+  opacity: 0.55;
+}
+.sticky.is-stuck {
+  opacity: 1;
+  box-shadow: 0 3px 5px rgb(0 0 0 / 28%);
+}
+/* 色は種類の見分けの補助だけ（どの付箋にも種類の名前が書いてある） */
+.sticky-target {
+  background: #e6d79c;
+}
+.sticky-scale {
+  background: #cfd8b4;
+}
+.sticky-deadline {
+  background: #c9d3d6;
+}
+.sticky-priority {
+  background: #e4c4b4;
+}
+.sticky-label {
+  font-weight: 700;
+}
+.sticky select {
+  border: none;
+  background: transparent;
+  padding: 0 2px;
+  font-size: 12px;
+}
+
+/* 筆の文字：墨の濃淡（文字ごとの --ink-density）と滲み。入力は透明な textarea の上で行い、写しが墨で見える */
+.ink-field {
+  position: relative;
+}
+.ink-text,
+.ink-input {
+  margin: 0;
+  padding: 2px 0;
+  font-family: var(--brush);
+  font-size: 30px;
+  font-weight: 400;
+  line-height: 1.55;
+  letter-spacing: 0.04em;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.ink-mirror {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  border-bottom: 1px solid transparent;
+}
+.ink-glyph {
+  opacity: var(--ink-density, 1);
+  text-shadow:
+    0 0 0.6px rgb(43 29 14 / 75%),
+    0 0 2.6px rgb(43 29 14 / 22%);
+}
+.decree-text.ink-input {
+  position: relative;
+  display: block;
+  width: 100%;
+  color: transparent;
+  caret-color: var(--ink);
+  background: transparent;
+  border: none;
+  border-bottom: 1px solid var(--ink-faint);
+  resize: none;
+  outline: none;
+}
+.decree-text.ink-input::placeholder {
+  color: rgb(43 29 14 / 28%);
+  font-family: var(--brush);
+}
+/* IME で変換している間は、入力欄の文字をそのまま見せる（写しは隠す） */
+.ink-field.is-composing .ink-input {
+  color: var(--ink);
+}
+.ink-field.is-composing .ink-mirror {
+  visibility: hidden;
+}
+.decree-preview {
+  min-height: 3.2em;
+  border-bottom: 1px solid var(--ink-faint);
+  font-size: 30px;
+}
+.decree-preview.is-blank {
+  font-family: var(--serif);
+  font-size: 18px;
+  color: rgb(43 29 14 / 35%);
+}
+.sheet-hints {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 14px;
+  margin: 10px 0 0;
+}
+
+/* 残り字数：用紙の右下に朱で小さく。超えたら「超過」と書いて二重下線（色だけに頼らない） */
+.decree-sheet .remaining {
+  position: absolute;
+  right: 20px;
+  bottom: 10px;
+  margin: 0;
+  font-family: var(--serif);
+  font-size: 13px;
+  color: var(--vermilion);
+}
+.decree-sheet .remaining.over {
+  font-weight: 700;
+  text-decoration: underline double;
+}
+.remaining-over {
+  margin-left: 6px;
+  padding: 0 4px;
+  border: 1px solid var(--vermilion);
+  font-size: 11px;
+}
+.decree-sheet .seal-imprint {
+  right: 110px;
+  bottom: 18px;
+}
+
+/* ---------- 判子：持ち上げ → 朱肉 → 用紙の上へ → 押す（約1.2秒） ---------- */
+.desk-object-stamp.is-companion {
+  overflow: visible;
+}
+.stamp-object {
+  position: relative;
+  z-index: 2;
+}
+.stamp-object.is-ready .seal-button:hover:not(:disabled) {
+  transform: translateY(-8px) scale(1.04);
+}
+.stamp-object.is-pressing .seal-button,
+.stamp-object.is-pressing .seal-button:disabled {
+  filter: none;
+  cursor: default;
+  outline: none;
+  animation: seal-press var(--stamp-ms) cubic-bezier(0.45, 0, 0.25, 1) forwards;
+}
+@keyframes seal-press {
+  0% {
+    transform: none;
+  }
+  16% {
+    transform: translate(0, -22px) scale(1.06);
+  }
+  34% {
+    transform: translate(0, var(--pad-dy, -40px)) scale(0.98);
+  }
+  46% {
+    transform: translate(0, calc(var(--pad-dy, -40px) - 28px)) scale(1.05);
+  }
+  74% {
+    transform: translate(var(--press-dx, -120px), calc(var(--press-dy, 0px) - 36px)) scale(1.08);
+  }
+  86% {
+    transform: translate(var(--press-dx, -120px), var(--press-dy, 0px)) scale(0.94);
+  }
+  100% {
+    transform: translate(var(--press-dx, -120px), calc(var(--press-dy, 0px) - 12px)) scale(1);
+  }
+}
+/* 判の跡は押した瞬間（86%）に現れる。用紙は影だけで沈む（入力のある紙は変形させない） */
+.decree-sheet .seal-imprint {
+  transition:
+    transform 180ms cubic-bezier(0.2, 1.5, 0.35, 1) calc(var(--stamp-ms) * 0.84),
+    opacity 120ms ease-in calc(var(--stamp-ms) * 0.84);
+}
+.decree-sheet.is-stamped {
+  animation: sheet-sink var(--stamp-ms) linear;
+}
+@keyframes sheet-sink {
+  84% {
+    box-shadow:
+      0 1px 0 rgb(255 255 255 / 30%) inset,
+      0 2px 3px rgb(0 0 0 / 25%),
+      0 10px 24px rgb(0 0 0 / 30%);
+  }
+  89% {
+    box-shadow:
+      0 1px 0 rgb(255 255 255 / 30%) inset,
+      0 1px 1px rgb(0 0 0 / 35%),
+      0 3px 8px rgb(0 0 0 / 30%);
+  }
+}
+.reduce-motion .stamp-object.is-pressing .seal-button,
+.reduce-motion .decree-sheet.is-stamped {
+  animation: none;
+}
+.reduce-motion .decree-sheet .seal-imprint {
+  transition: opacity var(--stamp-ms) ease-in;
+}
+
+/* ---------- 結果の書類束：紐で綴じる・訂正の印・意図の丸／斜線 ---------- */
+.sheets.bound {
+  margin-top: 6px;
+}
+.binding-cord {
+  position: absolute;
+  z-index: 30;
+  top: -8px;
+  left: 18px;
+  width: 54px;
+  height: 54px;
+  border-top: 3px solid #7a5a3a;
+  border-left: 3px solid #7a5a3a;
+  border-radius: 6px 0 0 0;
+  pointer-events: none;
+}
+.binding-cord::after {
+  content: "";
+  position: absolute;
+  top: -7px;
+  left: -7px;
+  width: 11px;
+  height: 11px;
+  border-radius: 50%;
+  background: #6a4a2c;
+}
+.sheet-current {
+  cursor: grab;
+  touch-action: pan-y;
+}
+.sheet.is-dragging {
+  transition: none;
+  cursor: grabbing;
+}
+.correction-mark {
+  display: inline-grid;
+  place-items: center;
+  width: 1.5em;
+  height: 1.5em;
+  border: 1.5px solid var(--vermilion);
+  border-radius: 50%;
+  color: var(--vermilion);
+  font-family: var(--serif);
+  font-size: 11px;
+  font-weight: 700;
+}
+.intent-mark {
+  float: right;
+  width: 38px;
+  height: 38px;
+  margin: -4px 0 0 8px;
+}
+.intent-mark.is-achieved {
+  border: 2px solid var(--pencil);
+  border-radius: 50%;
+}
+.intent-mark.is-missed {
+  background: linear-gradient(135deg, transparent 46%, var(--pencil) 47%, var(--pencil) 53%, transparent 54%);
+}
+.sheet-hint {
+  margin: 6px 0 0;
+  font-size: 12px;
+  color: var(--ink-soft);
+}
+
+/* ---------- 新聞：二つ折りで置く・面をめくる ---------- */
+.newspaper-masthead {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+}
+.newspaper-page {
+  font-family: var(--sans);
+  font-size: 11px;
+  letter-spacing: 0.1em;
+  color: var(--ink-soft);
+}
+.newspaper-continued {
+  margin: 8px 0 0;
+  padding-top: 6px;
+  border-top: 1px dashed var(--ink-faint);
+  font-size: 13px;
+  font-weight: 700;
+  text-align: right;
+}
+.newspaper-footer {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.newspaper-paging {
+  display: flex;
+  gap: 8px;
+}
+.desk-object-newspaper.is-overview::after {
+  /* 二つ折りの折り目 */
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 26px;
+  background: linear-gradient(to bottom, transparent, rgb(43 29 14 / 22%));
+  pointer-events: none;
+}
+
+/* ---------- 側近書簡：封蝋と折り目（未読） ---------- */
+.envelope {
+  position: relative;
+  margin-top: 6px;
+  padding: 14px 14px 18px;
+  min-height: 110px;
+  background-color: #e2d4b3;
+  background-image:
+    linear-gradient(155deg, transparent 49.4%, rgb(43 29 14 / 18%) 49.6%, transparent 50.4%),
+    linear-gradient(25deg, transparent 49.4%, rgb(43 29 14 / 18%) 49.6%, transparent 50.4%);
+  border: 1px solid rgb(43 29 14 / 15%);
+}
+.envelope-front {
+  font-size: 15px;
+}
+.envelope-note {
+  margin: 4px 0 0;
+  font-family: var(--sans);
+  font-size: 11px;
+  color: var(--ink-soft);
+}
+.wax-seal {
+  position: absolute;
+  right: 18px;
+  bottom: 14px;
+  width: 54px;
+  height: 54px;
+  border: none;
+  border-radius: 47% 53% 50% 48%;
+  background: radial-gradient(circle at 38% 32%, #9a3a36, #7a2a2a 55%, #521a1a);
+  box-shadow:
+    inset 0 0 0 5px rgb(0 0 0 / 14%),
+    0 2px 4px rgb(0 0 0 / 35%);
+  color: rgb(232 220 192 / 80%);
+  font-family: var(--serif);
+  font-weight: 700;
+  font-size: 16px;
+  cursor: pointer;
+}
+.wax-seal:hover:not(:disabled) {
+  transform: scale(1.06);
+}
+.wax-seal:disabled {
+  cursor: default;
+}
+.report-letter {
+  font-size: 15px;
+}
+
+/* ---------- 台帳：開いた帳簿 ---------- */
+.ledger.ledger-book {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0;
+  align-items: stretch;
+  padding: 0;
+  background-image:
+    linear-gradient(90deg, transparent calc(50% - 10px), rgb(43 29 14 / 16%) 50%, transparent calc(50% + 10px)),
+    radial-gradient(ellipse at 15% 8%, rgb(255 255 255 / 28%), transparent 55%),
+    repeating-linear-gradient(0deg, rgb(43 29 14 / 2.5%) 0 1px, transparent 1px 3px);
+}
+.ledger-leaf {
+  padding: 14px 22px 12px;
+  min-width: 0;
+}
+.ledger-book .ledger-title {
+  font-size: 13px;
+}
+.ledger-year {
+  margin: 2px 0 8px;
+  font-size: 19px;
+  font-weight: 700;
+}
+.ledger-book .ledger-items {
+  display: grid;
+  gap: 2px;
+}
+.ledger-book .ledger-item {
+  justify-content: space-between;
+  border-bottom: 1px solid var(--ink-faint);
+}
+.ledger-book .ledger-item dd {
+  font-size: 17px;
+}
+.ledger-unrecorded {
+  font-family: var(--sans);
+  font-size: 12px;
+  font-weight: 400;
+  color: var(--ink-soft);
+}
+.ledger-subtitle {
+  margin: 0 0 10px;
+  font-size: 13px;
+  font-weight: 400;
+  letter-spacing: 0.2em;
+  color: var(--ink-soft);
+}
+.ledger-trends {
+  display: grid;
+  gap: 4px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.ledger-trends li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.trend-label {
+  font-size: 13px;
+  color: var(--pencil);
+}
+.sparkline polyline {
+  fill: none;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.spark-line {
+  stroke: #6b6b6b;
+  stroke-width: 1.4;
+}
+.spark-ghost {
+  stroke: rgb(107 107 107 / 35%);
+  stroke-width: 1;
+}
+.spark-empty {
+  font-size: 11px;
+  color: var(--ink-soft);
+}
+.ledger-paging {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 10px;
+}
+.ledger-page-count {
+  font-family: var(--sans);
+  font-size: 12px;
+  color: var(--ink-soft);
+}
+
+/* ---------- メモ帳と留めたメモ ---------- */
+.notepad-page {
+  padding: 10px 14px 12px;
+  background-color: #efe6cf;
+  background-image: repeating-linear-gradient(0deg, transparent 0 27px, rgb(90 122 139 / 22%) 27px 28px);
+}
+.note-text {
+  display: block;
+  width: 100%;
+  min-height: 84px;
+  margin: 0;
+  border: none;
+  background: transparent;
+  color: var(--pencil);
+  font-size: 17px;
+  line-height: 28px;
+  resize: none;
+  outline: none;
+}
+.note-preview.is-blank {
+  color: rgb(91 85 72 / 45%);
+}
+.note-tools {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin-top: 6px;
+  font-family: var(--sans);
+  font-size: 12px;
+}
+.note-count.over {
+  color: var(--vermilion);
+  font-weight: 700;
+  text-decoration: underline double;
+}
+.note-target {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+.note-target select {
+  max-width: 220px;
+}
+.notepad-subtitle {
+  margin: 12px 0 6px;
+  font-family: var(--sans);
+  font-size: 12px;
+  font-weight: 400;
+  letter-spacing: 0.1em;
+  color: rgb(232 220 192 / 75%);
+}
+.desk-object .notepad-subtitle {
+  color: var(--ink-soft);
+}
+.torn-notes {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.torn-note {
+  padding: 8px 12px;
+  background: #f3ead5;
+  clip-path: polygon(0 3px, 8% 0, 22% 3px, 40% 0, 58% 3px, 76% 0, 92% 3px, 100% 0, 100% 100%, 0 100%);
+  box-shadow: 0 2px 4px rgb(0 0 0 / 25%);
+  color: var(--pencil);
+}
+.torn-text {
+  margin: 0;
+  font-size: 15px;
+}
+.torn-where {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 4px 0 0;
+  font-family: var(--sans);
+  font-size: 11px;
+  color: var(--ink-soft);
+}
+.torn-where select {
+  max-width: 240px;
+  font-size: 11px;
+}
+
+/* 書類に留めたメモ：小さな紙片。かざす・焦点を当てると開く */
+.pinned-notes {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 4px 0 0;
+  padding: 0;
+  list-style: none;
+}
+.pinned-note {
+  position: relative;
+  display: inline-flex;
+  align-items: baseline;
+  gap: 8px;
+  max-width: min(100%, 26em);
+  padding: 3px 8px 4px;
+  background: #f3ead5;
+  border-top: 3px solid rgb(91 85 72 / 45%);
+  box-shadow: 0 2px 3px rgb(0 0 0 / 25%);
+  color: var(--pencil);
+  font-size: 13px;
+  line-height: 1.5;
+  transform: rotate(-0.6deg);
+}
+.pinned-note:nth-child(even) {
+  transform: rotate(0.5deg);
+}
+.pinned-note:focus-visible {
+  outline: 2px solid var(--vermilion);
+  outline-offset: 2px;
+}
+.pinned-tab {
+  flex: none;
+  font-weight: 700;
+}
+
+/* ---------- 既決箱 ---------- */
+.archive-box {
+  padding: 12px 16px;
+  border: 10px solid #5a3f25;
+  border-radius: 4px;
+  background: linear-gradient(#e8dcc0, #d9caa6);
+  box-shadow: inset 0 4px 10px rgb(0 0 0 / 30%);
+}
+.archive-count {
+  margin: 0 0 8px;
+  font-family: var(--sans);
+  font-size: 12px;
+  color: var(--ink-soft);
+}
+.archive-years {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.archive-year {
+  padding: 3px 10px;
+  border: 1px solid rgb(43 29 14 / 30%);
+  border-bottom-width: 3px;
+  background: var(--paper);
+  color: var(--ink);
+  font-family: var(--serif);
+  font-size: 13px;
+  cursor: pointer;
+}
+.archive-year.is-selected {
+  border-color: var(--vermilion);
+  box-shadow: inset 0 -2px 0 var(--vermilion);
+  font-weight: 700;
+}
+.archive-year:disabled {
+  cursor: default;
+}
+.archive-reader {
+  margin-top: 12px;
+}
+.archive-docs {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+.archive-docs .button.is-selected {
+  border-color: var(--vermilion);
+  font-weight: 700;
+  box-shadow: inset 0 -2px 0 var(--vermilion);
+}
+.archive-letters {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 12px;
+}
+.desk-object-archive.shadow-box {
+  padding: 0;
+  background: none;
+}
+.mode-flat .flat-object-archive {
+  margin-top: 22px;
+}
+.mode-flat .archive .panel-title,
+.mode-flat .notepad .panel-title {
+  color: rgb(232 220 192 / 75%);
+}
+.mode-flat .archive-reader .button:not(.is-selected),
+.mode-flat .notepad .panel-note {
+  color: var(--paper);
+  border-color: rgb(232 220 192 / 50%);
+}
+
+/* --- 見直し（スクリーンショットで読みにくかった所） --- */
+/* 封書の宛名は折り目の線の上に紙の帯を敷いて読みやすく */
+.envelope-front,
+.envelope-note {
+  position: relative;
+  display: inline-block;
+  padding: 0 6px;
+  background: #e2d4b3;
+}
+.envelope-note {
+  display: block;
+  width: fit-content;
+}
+/* 紐は紙の角の外側に掛け、題の書き出しにかからないように */
+.binding-cord {
+  top: -12px;
+  left: -10px;
+  width: 44px;
+  height: 44px;
+}
+/* 既決箱は木箱の枠ごと物にする（題が暗い机に溶けないように） */
+.desk-object-archive .archive {
+  padding: 10px 14px 14px;
+  background: #4a3420;
+  border-radius: 4px;
+}
+.desk-object-archive .archive > .panel-title {
+  color: rgb(232 220 192 / 85%);
+}
+.desk-object-archive .archive-reader .button:not(.is-selected) {
+  color: var(--paper);
+  border-color: rgb(232 220 192 / 50%);
+}
+.desk-object-archive .archive-box {
+  border-width: 6px;
+}
+/* 折れ線は頁の幅に合わせて伸ばす（線の太さは保つ） */
+.sparkline {
+  flex: 1;
+  max-width: 260px;
+  height: 28px;
+}
+.sparkline polyline {
+  vector-effect: non-scaling-stroke;
+}
+/* 狭い列のメモ帳：留め先の選択肢を一行に広げる */
+.note-target {
+  flex: 1 1 100%;
+}
+.note-target select {
+  flex: 1;
+  min-width: 0;
+  max-width: none;
+}
+/* 既決箱から取り出した結果の束：題・枚数・めくり方は木箱の暗い地に載るので明るい字に */
+.desk-object-archive .archive-reader .result-heading,
+.desk-object-archive .archive-reader .sheet-count,
+.desk-object-archive .archive-reader .sheet-hint {
+  color: rgb(232 220 192 / 85%);
+}
+/* メモ帳の留め先：長い記事名でも紙の幅を越えない */
+.note-target {
+  min-width: 0;
+  max-width: 100%;
+}
+.note-target select {
+  text-overflow: ellipsis;
+}
+.mode-flat .archive-reader .result-heading,
+.mode-flat .archive-reader .sheet-count,
+.mode-flat .archive-reader .sheet-hint {
+  color: rgb(232 220 192 / 85%);
+}
+/* 取り出している書類は紙の地に墨の字（朱の下線と太字を併用し、色だけに頼らない） */
+.archive-docs .button.is-selected {
+  background: var(--paper);
+  color: var(--ink);
+}
+/* 広い平面の台帳でも、項目名の隣に折れ線を置く（右端に離れて対応が追いにくくならないように） */
+.ledger-trends li {
+  justify-content: flex-start;
+}
+.ledger-trends .trend-label {
+  flex: none;
+  width: 5em;
+}

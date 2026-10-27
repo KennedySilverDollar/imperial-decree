@@ -1,9 +1,11 @@
 import { useState } from "react";
 import { ALL_AIDE_PROFILES, type Aide } from "../../domain/Aide";
 import { APPOINT_POLITICAL_COST, MAX_AIDES } from "../../domain/constants";
+import type { PlayerNote } from "../../domain/PlayerNotes";
 import type { AideReport } from "../../domain/TurnRecord";
 import { renderReportNote } from "../../engine/ResultView";
 import { aideName, messages } from "../../i18n/messages";
+import { PinnedNotes } from "./PinnedNotes";
 
 const t = messages.ui.aides;
 
@@ -27,16 +29,50 @@ function AideProfile({ aide }: { readonly aide: AideLike }) {
   );
 }
 
-function ReportLetter({ report }: { readonly report: AideReport | undefined }) {
-  if (!report) return <p className="report-empty">{t.noReport}</p>;
+/** 開いた書簡の本文（既決箱でも使う） */
+export function ReportLetter({ report, notes = [] }: { readonly report: AideReport; readonly notes?: readonly PlayerNote[] }) {
   const lines = [
     ...report.items.map((item) => messages.reports.item(messages.params[item.param], item.delta)),
     ...report.notes.map(renderReportNote),
   ];
   return (
-    <div className="report-letter fade-in">
+    <div className="report-letter fade-in" data-testid={`report-${report.aideId}`}>
       <div className="report-header">{messages.reports.header(aideName(report.aideId))}</div>
-      {lines.length === 0 ? <p>{messages.reports.nothingToReport}</p> : lines.map((line, i) => <p key={i}>{line}</p>)}
+      <div className="report-body">
+        {lines.length === 0 ? <p>{messages.reports.nothingToReport}</p> : lines.map((line, i) => <p key={i}>{line}</p>)}
+      </div>
+      <PinnedNotes notes={notes} />
+    </div>
+  );
+}
+
+/**
+ * 封書（SPEC_v3.3 §3.2）：届いた報告は封蝋で閉じてあり、折り目が付いている（未読の印）。
+ * 封蝋を割ると開いて読める。開いたかどうかは机の UI ストアが年ごとに持つ。
+ */
+function SealedLetter(props: {
+  readonly report: AideReport | undefined;
+  readonly opened: boolean;
+  readonly canOpen: boolean;
+  readonly onOpen: () => void;
+  readonly notes: readonly PlayerNote[];
+}) {
+  const { report } = props;
+  if (!report) return <p className="report-empty">{t.noReport}</p>;
+  if (props.opened) return <ReportLetter report={report} notes={props.notes} />;
+  return (
+    <div className="envelope is-sealed" data-testid={`envelope-${report.aideId}`}>
+      <div className="envelope-front">{messages.reports.header(aideName(report.aideId))}</div>
+      <p className="envelope-note">{t.unread}</p>
+      <button
+        className="wax-seal"
+        disabled={!props.canOpen}
+        onClick={props.onOpen}
+        aria-label={t.breakSeal(aideName(report.aideId))}
+        data-testid={`open-letter-${report.aideId}`}
+      >
+        <span aria-hidden>{t.sealGlyph}</span>
+      </button>
     </div>
   );
 }
@@ -47,11 +83,17 @@ interface Props {
   readonly candidates: readonly string[];
   readonly politicalCapital: number;
   readonly disabled: boolean;
+  /** 封蝋を割れる（手元にある）か */
+  readonly canOpen: boolean;
+  readonly opened: (aideId: string) => boolean;
+  readonly onOpen: (aideId: string) => void;
+  /** 書簡に留めたメモ */
+  readonly notesFor: (aideId: string) => readonly PlayerNote[];
   readonly onAppoint: (candidateId: string) => void;
   readonly onDismiss: (aideId: string) => void;
 }
 
-export function AidePanel({ aides, reports, candidates, politicalCapital, disabled, onAppoint, onDismiss }: Props) {
+export function AidePanel({ aides, reports, candidates, politicalCapital, disabled, canOpen, opened, onOpen, notesFor, onAppoint, onDismiss }: Props) {
   const [confirming, setConfirming] = useState<string | null>(null);
   const seatsOpen = aides.length < MAX_AIDES;
   const candidateProfiles = candidates
@@ -66,7 +108,13 @@ export function AidePanel({ aides, reports, candidates, politicalCapital, disabl
         {aides.map((aide) => (
           <article className="paper letter" key={aide.id} data-testid={`aide-${aide.id}`}>
             <AideProfile aide={aide} />
-            <ReportLetter report={reports.find((r) => r.aideId === aide.id)} />
+            <SealedLetter
+              report={reports.find((r) => r.aideId === aide.id)}
+              opened={opened(aide.id)}
+              canOpen={canOpen}
+              onOpen={() => onOpen(aide.id)}
+              notes={notesFor(aide.id)}
+            />
             <div className="aide-actions">
               {confirming === aide.id ? (
                 <>
