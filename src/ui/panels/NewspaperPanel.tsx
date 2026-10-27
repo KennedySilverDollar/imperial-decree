@@ -3,6 +3,13 @@ import { LETTERS_DWELL_MS } from "../../domain/constants";
 import type { Newspaper, Section } from "../../domain/News";
 import type { PlayerNote } from "../../domain/PlayerNotes";
 import { renderNewspaper } from "../../engine/Newspaper";
+import type { BuildingId } from "../../domain/Buildings";
+import { RefText } from "../reading/RefText";
+import type { MapRefTerm } from "../reading/mapRefs";
+
+/** 記事が扱う建物の名を、地図の区画のしるしに結ぶ（並べ読み） */
+const buildingTerms = (building: BuildingId | null): readonly MapRefTerm[] =>
+  building === null ? [] : [{ term: messages.targets[building], ref: { kind: "building", building } }];
 import { messages } from "../../i18n/messages";
 import { PinnedNotes } from "./PinnedNotes";
 
@@ -144,10 +151,12 @@ export function NewspaperPanel({ newspaper, page, onPage, interactive, notesFor,
             {front && (
               <article className="news-article news-front" data-section={front.sectionId}>
                 <div className="newspaper-section">{front.section}</div>
-                <h3 className="newspaper-headline">{front.headline}</h3>
+                <h3 className="newspaper-headline">
+                  <RefText text={front.headline} buildings={buildingTerms(front.relatedBuilding)} />
+                </h3>
                 {front.body.map((line, j) => (
                   <p className="news-body" key={j}>
-                    {line}
+                    <RefText text={line} buildings={buildingTerms(front.relatedBuilding)} />
                   </p>
                 ))}
                 <PinnedNotes notes={notesFor(front.id)} />
@@ -170,10 +179,12 @@ export function NewspaperPanel({ newspaper, page, onPage, interactive, notesFor,
                     onBlur={isLetter ? leaveLetters : undefined}
                   >
                     <div className="newspaper-section">{article.section}</div>
-                    <h4 className="newspaper-subhead">{article.headline}</h4>
+                    <h4 className="newspaper-subhead">
+                      <RefText text={article.headline} buildings={buildingTerms(article.relatedBuilding)} />
+                    </h4>
                     {article.body.map((line, j) => (
                       <p className="news-body" key={j}>
-                        {line}
+                        <RefText text={line} buildings={buildingTerms(article.relatedBuilding)} />
                       </p>
                     ))}
                     <PinnedNotes notes={notesFor(article.id)} />

@@ -1,11 +1,13 @@
 import { useState } from "react";
 import { ALL_AIDE_PROFILES, type Aide } from "../../domain/Aide";
 import { APPOINT_POLITICAL_COST, MAX_AIDES } from "../../domain/constants";
+import type { BuildingId } from "../../domain/Buildings";
 import type { PlayerNote } from "../../domain/PlayerNotes";
 import type { AideReport } from "../../domain/TurnRecord";
 import { renderReportNote } from "../../engine/ResultView";
 import { aideName, messages } from "../../i18n/messages";
 import { PinnedNotes } from "./PinnedNotes";
+import { RefText } from "../reading/RefText";
 
 const t = messages.ui.aides;
 
@@ -31,15 +33,20 @@ function AideProfile({ aide }: { readonly aide: AideLike }) {
 
 /** 開いた書簡の本文（既決箱でも使う） */
 export function ReportLetter({ report, notes = [] }: { readonly report: AideReport; readonly notes?: readonly PlayerNote[] }) {
-  const lines = [
-    ...report.items.map((item) => messages.reports.item(messages.params[item.param], item.delta)),
-    ...report.notes.map(renderReportNote),
+  // 報告の行と、その行が扱う建物（並べ読みで地図の区画を示す）
+  const lines: { text: string; building: BuildingId | null }[] = [
+    ...report.items.map((item) => ({ text: messages.reports.item(messages.params[item.param], item.delta), building: null })),
+    ...report.notes.map((note) => ({ text: renderReportNote(note), building: "building" in note ? note.building : null })),
   ];
   return (
     <div className="report-letter fade-in" data-testid={`report-${report.aideId}`}>
       <div className="report-header">{messages.reports.header(aideName(report.aideId))}</div>
       <div className="report-body">
-        {lines.length === 0 ? <p>{messages.reports.nothingToReport}</p> : lines.map((line, i) => <p key={i}>{line}</p>)}
+        {lines.length === 0 ? <p>{messages.reports.nothingToReport}</p> : lines.map((line, i) => (
+              <p key={i}>
+                <RefText text={line.text} buildings={line.building === null ? [] : [{ term: messages.targets[line.building], ref: { kind: "building", building: line.building } }]} />
+              </p>
+            ))}
       </div>
       <PinnedNotes notes={notes} />
     </div>

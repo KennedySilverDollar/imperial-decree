@@ -529,6 +529,8 @@ export interface RenderedNewspaper {
     readonly section: string;
     readonly headline: string;
     readonly body: readonly string[];
+    /** 記事が扱う建物（relatedEntity。並べ読みで地図の区画を示すのに使う） */
+    readonly relatedBuilding: BuildingId | null;
   }[];
 }
 
@@ -539,5 +541,6 @@ export const renderNewspaper = (newspaper: Newspaper): RenderedNewspaper => ({
     section: messages.newspaper.sections[a.section],
     headline: a.headline,
     body: a.body,
+    relatedBuilding: a.relatedEntity?.kind === "building" ? (a.relatedEntity.id as BuildingId) : null,
   })),
 });
