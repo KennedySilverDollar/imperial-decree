@@ -10,15 +10,19 @@
     "test": "vitest run",
     "typecheck": "tsc -b --noEmit",
     "lint": "eslint .",
-    "sim": "tsx scripts/sim.ts"
+    "sim": "tsx scripts/sim.ts",
+    "terrain:check": "tsx scripts/terrain-check.ts",
+    "terrain:preview": "tsx scripts/terrain-preview.ts"
   },
   "dependencies": {
     "@fontsource/noto-sans-jp": "^5.3.1",
     "@fontsource/noto-serif-jp": "^5.3.1",
+    "d3-delaunay": "^6.0.4",
     "effect": "~3.22.4",
     "phaser": "~4.2.1",
     "react": "^19.3.1",
-    "react-dom": "^19.3.1"
+    "react-dom": "^19.3.1",
+    "simplex-noise": "^4.0.3"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
