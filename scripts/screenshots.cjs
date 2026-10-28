@@ -32,8 +32,13 @@ const LOG_KEY = "imperial-decree/log";
 const SETTINGS_KEY = "imperial-decree/settings";
 const FLAT_SETTINGS = JSON.stringify({ flat: true, motion: "system", textSize: "normal", showFps: false });
 
-const shot = (page, name, selector) =>
-  (selector ? page.locator(selector).first() : page).screenshot({ path: path.join(OUT, `${name}.png`) });
+// 地図の地形（Worker で生成）が出来上がるまで待つ（data-terrain-ready が false の間は生成中。v3.4 M2）
+const waitTerrain = (page) => page.waitForFunction(() => !document.querySelector('[data-terrain-ready="false"]'), null, { timeout: 30000 });
+
+const shot = async (page, name, selector) => {
+  await waitTerrain(page);
+  await (selector ? page.locator(selector).first() : page).screenshot({ path: path.join(OUT, `${name}.png`) });
+};
 
 const settle = (page, ms = 500) => page.waitForTimeout(ms);
 
