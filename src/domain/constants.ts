@@ -244,6 +244,15 @@ export const PAPER_FADE_MS = 400;
 /** 投書欄の記事にこれだけとどまったら「参照した」と数える（v3.2 §3.2 の計測） */
 export const LETTERS_DWELL_MS = 1200;
 
+// --- プレイヤーのメモ（地図に留める書き付け。ロジック非依存。AA-11） ---
+export const PLAYER_NOTES_STORAGE_KEY = "imperial-decree/notes";
+/** 書き付け1つの文字数の上限（コードポイント） */
+export const PLAYER_NOTE_MAX_CHARS = 40;
+/** 1つのセーブあたりの書き付けの数の上限 */
+export const PLAYER_NOTES_MAX_COUNT = 60;
+/** 区画を選んだときに出す記録（過去の記事・側近報告）の数の上限（新しい順） */
+export const PARCEL_ARCHIVE_MAX = 12;
+
 // --- セーブ ---
 export const SAVE_SCHEMA_VERSION = 2;
 export const SAVE_STORAGE_KEY = "imperial-decree/save";

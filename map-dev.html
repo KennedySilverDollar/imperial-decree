@@ -1,0 +1,20 @@
+<!doctype html>
+<html lang="ja">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>map dev</title>
+    <style>
+      body { margin: 16px; background: #3b2a1a; color: #e8dcc0; font-family: "Noto Serif JP", serif; }
+      .row { display: inline-flex; gap: 8px; margin: 0 12px 12px 0; align-items: flex-start; }
+      canvas { display: block; }
+      pre { font-size: 12px; white-space: pre-wrap; }
+    </style>
+  </head>
+  <body>
+    <!-- 開発用（npm run dev のときだけ配信される。本番のビルドには含めない）。地図（M2：区画・本通り・建物・普請中・開墾、M3：画法と L0〜L3）の確認 -->
+    <div id="maps"></div>
+    <pre id="log"></pre>
+    <script type="module" src="/src/ui/dev/mapDev.ts"></script>
+  </body>
+</html>
