@@ -33,10 +33,17 @@
   - `npm run typecheck`：`tsc -b --noEmit`
   - `npm run lint`：ESLint。`Math.random` 禁止、`src/domain` からの effect/phaser/react import 禁止を含む
   - `npm run sim -- [ゲーム数]`：ヘッドレスシミュレーション（既定1000ゲーム×3方策）。A-02 の合否（ヒューリスティック到達率）を PASS/FAIL で出力し、建物利用エントロピー・新聞の検閲削除率・イベント解決率なども出す。結果は `docs/BALANCE.md` §11（v3.1）・§28（v3.2＋v3.3）
+  - `npm run terrain:check -- [シード数=1000] [並列数]`：地形 v2 の検証（建設可能性・川・街道・地名、生成時間）。不合格があれば終了コード1
+  - `npm run terrain:preview -- [出力先] [saveId ...]`：地形の簡易プレビュー PNG
+  - 地図の確認（開発用、環境の Playwright）。出力先の既定は `docs/screenshots/m1`〜`m4`：
+    - `node scripts/terrain-browser.mjs`：ブラウザの Worker で地形の生成時間を測る（`terrain-dev.html`）
+    - `npx tsx scripts/map-states.ts <out.json> [シード,...] [年数,...]` → `node scripts/map-browser.mjs <out.json> [出力先] [lite]`：測量図 L0〜L3 と地形模型を描いて撮り、見えない値だけを変えた状態と画素を比べる（`map-dev.html`）
+    - `node scripts/map-interact.cjs [URL]`・`node scripts/relief-interact.cjs [URL]`：本番ビルド（`npm run preview -- --port 4173`）で手元の地図・地形模型を操作し、fps を測って撮る
 - パッケージ管理は **npm に統一**（`package-lock.json` をコミットする。pnpm / yarn は使わない。依存の追加は `npm install <pkg>`、CI やクリーン環境では `npm ci`）
 - バージョン固定（AMENDMENT A-10）：Effect `~3.22.4`、TypeScript `5.9.2`（完全固定）、Phaser `~4.2.1`。Effect 4.x は `Context.Tag` が廃止されているため使わない。理由は `docs/DECISIONS.md` D-56
 - 机と書類: DOM + CSS 3D（perspective / rotateX / translateZ）。完全3D（Three.js）は使わない
-- 地図: Phaser.CANVAS（AA-09）。地形生成は Web Worker + OffscreenCanvas で行い、生成物（ImageBitmap）をテクスチャとして読み込む。ノイズは simplex-noise（シード付き）、区画は d3-delaunay
+- 地図: Phaser.CANVAS（AA-09）。地形生成と静的レイヤのベイクは Web Worker + OffscreenCanvas で行い、ImageBitmap を CPU 側の Canvas に写して使う。MapScene はゲームの Canvas に Canvas 2D で直接描く（DECISIONS BC-27・BC-37）。ノイズは simplex-noise（シード付き）、区画は d3-delaunay
+- 地形模型（M4）: Canvas 2D の擬似3D（Three.js は承認がないので使わない。DECISIONS §17.12）
 - 音: 小さな AudioService（Web Audio API）。素材は CC0 または自作のみ
 - 追加の依存を入れるときは、名称・ライセンス・用途を docs/DECISIONS.md に記録して許可を得る
 
@@ -77,8 +84,10 @@ v3.4（地図リアリティ、SPEC_v3.4.md）で追加・変更するファイ�
 src/ui/map/terrain/       地形生成の純関数群（基礎地形・段丘・侵食・水文・地質・植生・街道。DOM 非依存）。terrain.worker は薄いラッパー
 src/ui/map/cartography/   画法（レイヤ、ケバ・等高線、注記、紙の経年、ベイクの陰影、LOD、建物平面）
 src/ui/map/ParcelMapper.ts, RoadRouter.ts   区画・道路の表示専用の写像（AA-10）
-src/ui/map/projectMapView.ts   GameState → MapViewModel の投影（地図の描画層が受け取る唯一の入力）
-src/ui/map/MapScene.ts, MapSnapshot.ts   MapScene は src/ui/scenes/ から移設予定（AA-15。テレイン統合と同じ変更で行う）
+src/ui/game/projectMapView.ts  GameState → MapViewModel の投影（地図の描画層が受け取る唯一の入力。BB-11 で ui/game に置く。型は src/ui/map/MapViewModel.ts）
+src/ui/map/MapScene.ts, MapSnapshot.ts   MapScene は M2 で src/ui/scenes/ から移設済み（AA-15）。MapSnapshot は M3
+src/ui/map/model3d/       地形模型（M4。ReliefMesh：形の純関数、ReliefModel：擬似3Dの描画）
+src/ui/notes/notesStore.ts   書き付け（PlayerNotes）の保存（セーブとは別のキー。AA-11）
 ```
 
 ## 4. アーキテクチャ上の不変条件（破らない）
@@ -161,4 +170,4 @@ src/ui/map/MapScene.ts, MapSnapshot.ts   MapScene は src/ui/scenes/ から移�
 
 ## 10. やらないこと（P0スコープ外）
 イベントシステム（**ただし v3.3 のランダムイベント3種は対象**）／複数新聞／官僚機構（官僚を個別の人物として作ること。v3.3 の労働・資材の割り振りは側近配下の抽象的な仕組みとして作る）／教育・監査・派閥工作／ジオラマ・霧／Tauri・Steamworks／英独中の多言語／ローカルLLM／課金要素／区画の手動指定／bridge・mill（P0.5以降）／動的な偏向値／100本以上のテンプレート。
-Three.js による完全3D／側近ごとの書体の差（P0）／モバイル対応も対象外。Three.js による地形模型（SPEC_v3.4 §10）は M4 として任意・要承認（BB-04）で、P0 のスコープ外は変えない。測量の遅れ（SPEC_v3.3 §5.9）は既定無効のフラグとしてのみ扱う。
+Three.js による完全3D／側近ごとの書体の差（P0）／モバイル対応も対象外。Three.js による地形模型（SPEC_v3.4 §10）は M4 として任意・要承認（BB-04）で、P0 のスコープ外は変えない（M4 は Three.js の承認がないので Canvas 2D の擬似3D で実装した。`src/ui/map/model3d/`、DECISIONS §17.12）。測量の遅れ（SPEC_v3.3 §5.9）は既定無効のフラグとしてのみ扱う。
