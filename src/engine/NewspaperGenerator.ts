@@ -46,6 +46,7 @@ import {
 import { hashString } from "../domain/Prng";
 import { aideName, messages } from "../i18n/messages";
 import { makeRng, random, Rng } from "../services/Rng";
+import { placeNamesFor } from "../ui/map/terrain/Toponyms";
 import { VALIDATED_TEMPLATES as TEMPLATES } from "./NewspaperTemplates";
 
 // 決定論の新聞生成（v3.2 §1.5〜§1.7, §1.10 / CLAUDE.md §4-12）。LLM は使わない。
@@ -303,7 +304,8 @@ const render = (
       truth -= TRUTH_PENALTY_EUPHEMISM;
     }
     if (praised) truth -= TRUTH_PENALTY_PRAISE;
-    if (t.slots.includes("place")) values.place = yield* pickFrom(VOCABULARY.places);
+    // {place} は地名一覧（saveId だけから決まる小字）からのみ埋める（不変条件20、DECISIONS BB-12）。乱数は従来どおり1回だけ使う
+    if (t.slots.includes("place")) values.place = yield* pickFrom(placeNamesFor(c.saveId));
     if (t.slots.includes("season")) values.season = issue.season;
     if (t.slots.includes("faction")) values.faction = yield* pickFrom(VOCABULARY.factions);
     if (t.slots.includes("building")) {
