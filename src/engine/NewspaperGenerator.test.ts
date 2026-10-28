@@ -6,6 +6,7 @@ import { NEWSPAPER_MAX_ARTICLES, NEWSPAPER_MIN_ARTICLES } from "../domain/consta
 import { createInitialState, type GameState, type Params } from "../domain/GameState";
 import { SLOT_NAMES } from "../domain/News";
 import { derivedOf } from "./DerivedCalculator";
+import { placeNamesFor } from "../ui/map/terrain/Toponyms";
 import { fillSlots, generateNewspaper, newspaperSeed, type NewsContext } from "./NewspaperGenerator";
 
 // 新聞（v3.2 §1.5〜§1.10 / CLAUDE.md §4-12, §4-16）
@@ -64,6 +65,28 @@ describe("決定論（seed = hash(saveId, turn)）", () => {
     expect(generate(c)).toEqual(generate(c));
     expect(generate(c).newspaper.seed).toBe(newspaperSeed(c.saveId, c.turn));
     expect(newspaperSeed(c.saveId, 5)).not.toBe(newspaperSeed(c.saveId, 6));
+  });
+});
+
+describe("{place} は地名一覧から（不変条件20、DECISIONS BB-12）", () => {
+  it("{place} を持つテンプレートの記事には、その saveId の小字が入る", () => {
+    const placeTypes = new Set(TEMPLATES.filter((t) => t.slots.includes("place")).map((t) => t.type));
+    const everyVariantHasPlace = (type: string) => TEMPLATES.filter((t) => t.type === type).every((t) => t.slots.includes("place"));
+    let checked = 0;
+    for (const seed of [1, 2, 3, 4, 5]) {
+      const state = createInitialState(seed);
+      const places = placeNamesFor(state.saveId);
+      for (let turn = 1; turn <= 30; turn++) {
+        const paper = generate(contextOf(state, { population: 120 + turn * 3, corruption: 5 + turn }, turn)).newspaper;
+        for (const a of paper.articles) {
+          if (!placeTypes.has(a.id) || !everyVariantHasPlace(a.id)) continue;
+          const text = [a.headline, ...a.body].join("");
+          expect(places.some((p) => text.includes(p))).toBe(true);
+          checked++;
+        }
+      }
+    }
+    expect(checked).toBeGreaterThan(0);
   });
 });
 

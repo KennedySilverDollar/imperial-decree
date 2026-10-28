@@ -1,15 +1,19 @@
-import { useEffect, useReducer, useRef, useState, type CSSProperties, type ReactNode } from "react";
+import { useCallback, useEffect, useMemo, useReducer, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import { DECREE_POLITICAL_COST } from "../../domain/constants";
 import { messages } from "../../i18n/messages";
 import { FpsOverlay } from "../dev/FpsOverlay";
 import { useFpsMonitor } from "../dev/fps";
+import { parcelArchive } from "../game/parcelArchive";
+import { withNotes } from "../game/projectMapView";
 import type { GameSession } from "../game/useGameSession";
+import { usePlayerNotes } from "../notes/notesStore";
 import { AidePanel } from "../panels/AidePanel";
 import { DecreePanel } from "../panels/DecreePanel";
 import { EndingScreen } from "../panels/EndingScreen";
 import { LedgerPanel } from "../panels/LedgerPanel";
 import { MapPanel } from "../panels/MapPanel";
 import { NewspaperPanel } from "../panels/NewspaperPanel";
+import { ReliefPanel } from "../panels/ReliefPanel";
 import { ResultStack, sheetCountOf } from "../panels/ResultStack";
 import { resolveReducedMotion, type Settings } from "../settings/settings";
 import { SettingsPanel } from "../settings/SettingsPanel";
@@ -19,6 +23,7 @@ import { deskReducer, freshResultView, initialDeskState, sheetKey } from "./desk
 import { DeskStage } from "./DeskStage";
 import { FlatDesk } from "./FlatDesk";
 import { commandForKey, keyTargetOf, type KeyCommand } from "./keyboard";
+import { RELIEF_LIGHT } from "./lighting";
 import { motionTimings } from "./motion";
 import { DESK_OBJECT_IDS, type DeskObjectId, type PickableId } from "./objects";
 import { Lamp } from "./objects/Lamp";
@@ -51,7 +56,7 @@ interface Props {
 }
 
 export function Desk({ session, settings, onSettings, systemReducedMotion, fpsFromQuery, adaptive }: Props) {
-  const { game, phase, lastRecord, map, candidates, error, actions } = session;
+  const { game, phase, lastRecord, view, candidates, error, actions } = session;
   const [desk, dispatch] = useReducer(deskReducer, "", initialDeskState);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [confirmRestart, setConfirmRestart] = useState(false);
@@ -68,6 +73,15 @@ export function Desk({ session, settings, onSettings, systemReducedMotion, fpsFr
   const showFps = settings.showFps || fpsFromQuery;
   // 性能の自動調整（§9）は立体の机にだけ効かせる
   useFpsMonitor({ onSustainedLow: () => adaptive && mode === "3d" && setLowPower(true) });
+
+  // 地図に留める書き付け（PlayerNotes。ロジック非依存・別のキーに保存。AA-11）と、区画の記録
+  const notes = usePlayerNotes(game?.saveId ?? null, game?.turn ?? 0);
+  const mapView = useMemo(() => (view === null ? null : withNotes(view, notes.notes)), [view, notes.notes]);
+  const history = game?.history;
+  const archiveOf = useCallback(
+    (gridIndex: number, place: string | null) => (history && mapView ? parcelArchive(history, mapView, gridIndex, place) : []),
+    [history, mapView],
+  );
 
   // 年が替わる・始め直すと、新しい勅令用紙にする
   const key = game === null ? "" : sheetKey(game.saveId, game.turn);
@@ -199,10 +213,11 @@ export function Desk({ session, settings, onSettings, systemReducedMotion, fpsFr
     return () => window.removeEventListener("keydown", onKey);
   }, []);
 
-  if (game === null || map === null) return <div className="desk loading">{messages.ui.loading}</div>;
+  if (game === null || mapView === null) return <div className="desk loading">{messages.ui.loading}</div>;
 
   const ui = messages.ui;
-  const objects = DESK_OBJECT_IDS.filter((id) => id !== "result" || lastRecord !== null);
+  // 地形模型は立体の机にだけ置く（SPEC_v3.4 §10.3。平面モードでは測量図のみ）
+  const objects = DESK_OBJECT_IDS.filter((id) => (id !== "result" || lastRecord !== null) && (id !== "relief" || mode === "3d"));
 
   const render = (id: DeskObjectId, interactive: boolean): ReactNode => {
     switch (id) {
@@ -210,10 +225,18 @@ export function Desk({ session, settings, onSettings, systemReducedMotion, fpsFr
         return <Lamp />;
       case "ledger":
         return <LedgerPanel params={game.params} delta={lastRecord?.actualResult ?? null} politicalCapital={game.politicalCapital} />;
+      case "relief":
+        return <ReliefPanel view={mapView} interactive={interactive} lowPower={lowPower} light={RELIEF_LIGHT} adaptive={adaptive} />;
       case "map":
         return (
           <MapPanel
-            map={map}
+            view={mapView}
+            interactive={interactive}
+            lowPower={lowPower}
+            reducedMotion={reduced}
+            archiveOf={archiveOf}
+            onAddNote={notes.add}
+            onRemoveNote={notes.remove}
             works={game.projects.map((p) => ({ id: p.id, building: p.kind, count: p.count, repair: p.repair, orderedTurn: p.orderedTurn }))}
           />
         );

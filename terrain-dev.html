@@ -1,0 +1,20 @@
+<!doctype html>
+<html lang="ja">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>terrain dev</title>
+    <style>
+      body { margin: 16px; background: #3b2a1a; color: #e8dcc0; font-family: "Noto Serif JP", serif; }
+      .seed { display: inline-block; margin: 0 12px 12px 0; vertical-align: top; }
+      .seed canvas { display: block; }
+      pre { font-size: 12px; white-space: pre-wrap; }
+    </style>
+  </head>
+  <body>
+    <!-- 開発用（npm run dev のときだけ配信される。本番のビルドには含めない）。地形 v2 の Worker 計測とプレビュー -->
+    <div id="seeds"></div>
+    <pre id="log"></pre>
+    <script type="module" src="/src/ui/dev/terrainDev.ts"></script>
+  </body>
+</html>

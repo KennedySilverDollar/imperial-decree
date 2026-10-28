@@ -3,13 +3,13 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { countTextChars, type Decree } from "../../domain/Decree";
 import type { GameState } from "../../domain/GameState";
 import type { IntentDeclaration } from "../../domain/IntentDeclaration";
-import type { MapState } from "../../domain/Map";
 import type { TurnRecord } from "../../domain/TurnRecord";
-import { mapOf } from "../../engine/MapUpdater";
 import { targetUsageOf } from "../../engine/Telemetry";
 import { messages } from "../../i18n/messages";
+import type { MapViewModel } from "../map/MapViewModel";
 import { validationMessage } from "../validation";
 import type { GameApi, Result } from "./GameApi";
+import { projectMapView } from "./projectMapView";
 
 // ゲームロジックを呼ぶ層（TurnMachine へのアダプタ）。状態の更新と計測ログはここだけで行い、
 // 描画層はこのフックが返す値を読んで、操作を actions 経由で頼むだけ（CLAUDE.md §4-5・不変条件17）。
@@ -29,7 +29,8 @@ export interface GameSession {
   readonly candidates: readonly string[];
   readonly error: string | null;
   readonly lastRecord: TurnRecord | null;
-  readonly map: MapState | null;
+  /** 地図に渡す投影（MapViewModel。不変条件26） */
+  readonly view: MapViewModel | null;
   readonly actions: {
     readonly submit: (decree: Decree, intent: IntentDeclaration | null) => Promise<void>;
     readonly closeResult: (reading: ResultReading) => void;
@@ -106,7 +107,7 @@ export function useGameSession(api: GameApi, newId: () => string = defaultId): G
   }, [api, game]);
 
   const lastRecord: TurnRecord | null = game?.history.at(-1) ?? null;
-  const map = useMemo(() => (game === null ? null : mapOf(game)), [game]);
+  const view = useMemo(() => (game === null ? null : projectMapView(game)), [game]);
 
   const submit = async (decree: Decree, intent: IntentDeclaration | null) => {
     if (game === null) return;
@@ -197,7 +198,7 @@ export function useGameSession(api: GameApi, newId: () => string = defaultId): G
     candidates,
     error,
     lastRecord,
-    map,
+    view,
     actions: {
       submit,
       closeResult,

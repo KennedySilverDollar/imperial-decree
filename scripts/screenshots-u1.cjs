@@ -31,6 +31,8 @@ const DECREES = [
 const settle = (page, ms = 450) => page.waitForTimeout(ms);
 /** 動き（transition）が終わってから撮る。ソフトウェア描画ではフレームが遅く、撮ると途中の色や位置が写るため */
 const shot = async (page, name) => {
+  // 地図の地形（Worker で生成）が出来上がるまで待つ（v3.4 M2）
+  await page.waitForFunction(() => !document.querySelector('[data-terrain-ready="false"]'), null, { timeout: 30000 });
   await page.waitForFunction(() => document.getAnimations().length === 0, null, { timeout: 5000 }).catch(() => {});
   await page.screenshot({ path: path.join(OUT, `${name}.png`) });
 };

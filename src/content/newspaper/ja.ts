@@ -473,7 +473,6 @@ export const TEMPLATES: readonly ArticleTemplateData[] = [
 
 /** スロットを埋める語彙 */
 export const VOCABULARY = {
-  places: ["北の空き地", "南の畑沿い", "川べり", "市場通り", "東の坂", "井戸端", "村の外れ", "渡し場の近く"],
   seasons: ["春", "夏", "秋", "冬"],
   /** 数値の前に置くヘッジ */
   numberHedges: ["概ね", "約", "およそ"],

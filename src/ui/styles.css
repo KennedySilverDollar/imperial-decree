@@ -1214,3 +1214,130 @@ select,
   padding-left: 1.2em;
   font-size: 12px;
 }
+
+/* ── 手元の地図（v3.4 M3）：操作・札・区画の記録 ───────────── */
+.map-stage {
+  position: relative;
+  width: fit-content;
+}
+.map-canvas.map-interactive {
+  cursor: grab;
+  touch-action: none;
+}
+.map-canvas.map-interactive:active {
+  cursor: grabbing;
+}
+.map-tooltip {
+  position: absolute;
+  left: 0;
+  top: 0;
+  z-index: 3;
+  pointer-events: none;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  padding: 3px 8px;
+  background: rgb(232 220 192 / 94%);
+  border: 1px solid rgb(43 29 14 / 45%);
+  color: var(--ink, #2b1d0e);
+  font-size: 0.82rem;
+  white-space: nowrap;
+}
+.map-tooltip-place {
+  font-weight: 600;
+}
+.map-controls {
+  position: absolute;
+  right: 6px;
+  bottom: 6px;
+  display: flex;
+  gap: 4px;
+}
+.map-controls button {
+  min-width: 28px;
+  padding: 2px 6px;
+  background: rgb(232 220 192 / 92%);
+  border: 1px solid rgb(43 29 14 / 55%);
+  color: #2b1d0e;
+  font: inherit;
+  cursor: pointer;
+}
+.map-parcel {
+  margin-top: 8px;
+  padding: 8px 10px;
+  border: 1px solid rgb(43 29 14 / 35%);
+  background: rgb(232 220 192 / 55%);
+}
+.map-parcel h3 {
+  margin: 0;
+  font-size: 1rem;
+}
+.map-parcel h4 {
+  margin: 8px 0 2px;
+  font-size: 0.85rem;
+}
+.map-parcel-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+}
+.map-archive,
+.map-notes {
+  margin: 0;
+  padding-left: 1.1em;
+  font-size: 0.85rem;
+}
+.map-archive-source {
+  margin-right: 0.6em;
+  opacity: 0.75;
+}
+.map-notes button {
+  margin-left: 0.6em;
+}
+.map-note-form {
+  display: flex;
+  gap: 6px;
+  margin-top: 6px;
+}
+.map-note-form input {
+  flex: 1;
+  min-width: 0;
+}
+
+/* ── 地形模型（v3.4 M4）─────────────────────────── */
+.relief-canvas {
+  display: block;
+  width: 100%;
+  max-width: 420px;
+  aspect-ratio: 1;
+  margin: 0 auto;
+}
+.relief-canvas.relief-interactive {
+  cursor: grab;
+  touch-action: none;
+}
+.relief-canvas.relief-interactive:active {
+  cursor: grabbing;
+}
+.relief-cloth {
+  user-select: none;
+  display: grid;
+  place-items: center;
+  aspect-ratio: 1;
+  max-width: 420px;
+  margin: 0 auto;
+  background: repeating-linear-gradient(135deg, rgb(200 190 170 / 55%) 0 6px, rgb(186 176 156 / 55%) 6px 12px);
+  border: 1px solid rgb(43 29 14 / 25%);
+}
+.relief-cloth .panel-note {
+  max-width: 80%;
+  text-align: center;
+}
+.relief-controls {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+  margin-top: 6px;
+}
