@@ -36,7 +36,8 @@ export const commandForKey = (input: KeyInput, ctx: KeyContext): KeyCommand | nu
   if (input.key === " " && ctx.animating) return { kind: "skip" };
 
   const pick = PICK_KEYS[input.key];
-  if (pick !== undefined) return { kind: "pickUp", id: pick };
+  // 地形模型は立体の机にだけある（平面モードでは無効。SPEC_v3.4 §10.3）
+  if (pick !== undefined) return pick === "relief" && ctx.mode === "flat" ? null : { kind: "pickUp", id: pick };
 
   // Tab（移動）・矢印（選択肢）・Enter（押下）は部品の上では部品に任せる
   if (input.target === "control") return null;

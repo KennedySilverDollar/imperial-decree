@@ -5,6 +5,7 @@ import type { GameState } from "../../domain/GameState";
 import { makeTestGameApi, playedState } from "../../test/gameApi";
 import { App } from "../App";
 import { DEFAULT_SETTINGS, SETTINGS_STORAGE_KEY, type Settings } from "../settings/settings";
+import { messages } from "../../i18n/messages";
 import { DESK_PERSPECTIVE_PX } from "./deskConstants";
 
 // 地図は Phaser（canvas）で描くが、jsdom には canvas が無いので Phaser だけ差し替える。地図の文字情報（凡例・普請中）は DOM なので比べられる。
@@ -209,6 +210,27 @@ describe("立体の机：俯瞰と手元", () => {
     press("6");
     press("Escape");
     expect(api.logged.filter((e) => e.event === "result.closed")).toHaveLength(1);
+  });
+});
+
+describe("地形模型（SPEC_v3.4 §10、M4）", () => {
+  it("立体の机にだけ置き、平面モードでは出さない。模型の文字は表題と注記だけで、地図にない情報を持たない", async () => {
+    const saved = await playedState(7, ["道を造れ", "家を建てよ"]);
+    await renderDesk({ flat: true }, saved);
+    expect(document.querySelector('[data-object="relief"]')).toBeNull();
+    press("8");
+    expect(document.querySelector('[data-state="focused"]')).toBeNull();
+    cleanup();
+
+    await renderDesk({ flat: false }, saved);
+    const relief = object("relief");
+    const ui = messages.ui.relief;
+    // jsdom には Worker がないので模型は作れない（地図の抽象グリッドと同じフォールバック）
+    expect(relief.querySelector(".relief-panel")?.getAttribute("data-relief-state")).toBe("unavailable");
+    expect(readable(relief)).toBe([ui.title, ui.unavailable, ui.note].join(" "));
+    // 模型があっても、ほかの書類の中身は平面モードと同じ（上の「表示される情報」の試験）
+    press("8");
+    expect(relief.getAttribute("data-state")).toBe("focused");
   });
 });
 

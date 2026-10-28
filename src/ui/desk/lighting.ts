@@ -134,3 +134,20 @@ export const lightingOverlay = (lampScreen: { readonly x: number; readonly y: nu
     `radial-gradient(ellipse at 50% 45%, transparent 50%, rgb(20 12 5 / 50%) 100%)`,
   ].join(", ");
 };
+
+/**
+ * 地形模型（SPEC_v3.4 §10）の光：机のランプへ向かう向きと、窓の光の向き（どちらも机の座標、光源へ向かう向き）。
+ * 模型を手に取って回しても、光は机に固定（陰が動く）。
+ */
+export const RELIEF_LIGHT = (() => {
+  const home = DESK_OBJECTS.relief.home;
+  const lamp: [number, number, number] = [LAMP_LIGHT.x - home.x, LAMP_LIGHT.y - home.y, LAMP_LIGHT.z - home.z];
+  const e = (WINDOW_LIGHT.elevationDeg * Math.PI) / 180;
+  const h = Math.hypot(WINDOW_LIGHT.fromX, WINDOW_LIGHT.fromY) || 1;
+  const win: [number, number, number] = [(WINDOW_LIGHT.fromX / h) * Math.cos(e), (WINDOW_LIGHT.fromY / h) * Math.cos(e), Math.sin(e)];
+  const norm = (v: [number, number, number]): [number, number, number] => {
+    const l = Math.hypot(...v) || 1;
+    return [v[0] / l, v[1] / l, v[2] / l];
+  };
+  return { lamp: norm(lamp), window: norm(win) } as const;
+})();

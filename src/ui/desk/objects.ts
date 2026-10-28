@@ -1,7 +1,7 @@
 // 机上オブジェクトの目録（SPEC_v3.3 §3.2・§4.7）。位置は机の単位で、紙の「上辺の中央」の置き場所。
 // メモ帳（§7）・既決箱は U2〜U4 で足す。
 
-export const DESK_OBJECT_IDS = ["lamp", "ledger", "map", "letters", "newspaper", "result", "decree", "stamp"] as const;
+export const DESK_OBJECT_IDS = ["lamp", "ledger", "relief", "map", "letters", "newspaper", "result", "decree", "stamp"] as const;
 export type DeskObjectId = (typeof DESK_OBJECT_IDS)[number];
 
 /** 手に取れる書類（判子は勅令用紙と一緒に手元へ来る。ランプは飾り） */
@@ -28,6 +28,8 @@ export interface DeskObjectSpec {
 export const DESK_OBJECTS: Readonly<Record<DeskObjectId, DeskObjectSpec>> = {
   lamp: { id: "lamp", width: 200, home: { x: -1040, y: -720, z: 40, rotate: 0 }, shadow: "drop" },
   ledger: { id: "ledger", width: 560, home: { x: -680, y: -660, z: 6, rotate: -3 }, shadow: "box" },
+  // 地形模型（SPEC_v3.4 §10、M4）：台帳の下、新聞の上の空いた所。立体の机にだけ置く（平面モードでは出さない）
+  relief: { id: "relief", width: 460, home: { x: -560, y: -520, z: 30, rotate: -1.5 }, shadow: "box" },
   map: { id: "map", width: 470, home: { x: 60, y: -690, z: 2, rotate: 0.6 }, shadow: "box" },
   letters: { id: "letters", width: 600, home: { x: 800, y: -650, z: 5, rotate: 2.2 }, shadow: "box" },
   newspaper: { id: "newspaper", width: 720, home: { x: -700, y: -40, z: 4, rotate: -4 }, shadow: "box" },
@@ -36,7 +38,7 @@ export const DESK_OBJECTS: Readonly<Record<DeskObjectId, DeskObjectSpec>> = {
   stamp: { id: "stamp", width: 150, home: { x: 1010, y: 140, z: 24, rotate: 0 }, shadow: "drop" },
 };
 
-/** §4.7：数字キーで手に取る順（7 のメモ帳は U4） */
+/** §4.7：数字キーで手に取る順（7 のメモ帳は U4。8 の地形模型は立体の机だけ） */
 export const PICK_KEYS: Readonly<Record<string, PickableId>> = {
   "1": "map",
   "2": "newspaper",
@@ -44,6 +46,7 @@ export const PICK_KEYS: Readonly<Record<string, PickableId>> = {
   "4": "decree",
   "5": "ledger",
   "6": "result",
+  "8": "relief",
 };
 
 export const isPickable = (id: DeskObjectId): id is PickableId => id !== "stamp" && id !== "lamp";

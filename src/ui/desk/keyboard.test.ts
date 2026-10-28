@@ -17,6 +17,11 @@ describe("キーボード操作（SPEC_v3.3 §4.7）", () => {
     expect(commandForKey(key("7"), ctx())).toBeNull();
   });
 
+  it("8 で地形模型を手に取る。模型は立体の机にだけあるので、平面モードでは何もしない（SPEC_v3.4 §10.3）", () => {
+    expect(commandForKey(key("8"), ctx())).toEqual({ kind: "pickUp", id: "relief" });
+    expect(commandForKey(key("8"), ctx({ mode: "flat" }))).toBeNull();
+  });
+
   it("文字の入力中は横取りしない（Esc を除く）。IME 変換中は Esc も", () => {
     expect(commandForKey(key("2", { target: "text" }), ctx())).toBeNull();
     expect(commandForKey(key("Enter", { target: "text" }), ctx({ focused: "decree" }))).toBeNull();

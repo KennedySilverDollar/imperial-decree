@@ -316,8 +316,53 @@ export const messages = {
       note: "区画は役人が自動で割り振る。位置は指定できない",
       worksTitle: "普請中の案件",
       noWorks: "普請中の案件はない",
+      /** 地形を生成している間（測量図ができるまでは略図を出す） */
+      surveying: "測量中…",
       work: (building: string, count: number, repair: boolean, orderedTurn: number) =>
         `${building}${repair ? "の修繕" : ""}×${count}（第${orderedTurn}年に発注）`,
+      /** 図枠（v3.4 M3） */
+      cartouche: (region: string) => `${region}測量図`,
+      surveyedYear: (turn: number) => `第${turn}年 測量`,
+      north: "北",
+      scale: (meters: number) => `${meters}m`,
+      /** 手元の地図の操作 */
+      controls: "地図の操作",
+      zoomIn: "拡大",
+      zoomOut: "縮小",
+      resetView: "全体",
+      hint: "ホイールで拡大・縮小、ドラッグで移動。区画を選ぶと、関係する記事と報告が出る",
+      /** 区画にかざしたとき（小字と建物の名前だけ） */
+      tooltip: {
+        empty: "空き地",
+        road: "本通り",
+        construction: (building: string) => `${building}（普請中）`,
+      },
+      /** 区画を選んだとき */
+      parcel: {
+        title: (place: string, use: string) => `${place}\u3000${use}`,
+        archive: "この区画に関する記録",
+        noArchive: "まだ記録はない",
+        newspaper: (turn: number) => `第${turn}年 新聞`,
+        report: (turn: number) => `第${turn}年 側近報告`,
+        notes: "書き付け",
+        noNotes: "書き付けはない",
+        notePlaceholder: (max: number) => `この区画への書き付け（${max}字まで）`,
+        addNote: "書き付ける",
+        removeNote: "消す",
+        close: "閉じる",
+        noteLabel: "書き付けの本文",
+      },
+    },
+    /** 地形模型（SPEC_v3.4 §10、M4） */
+    relief: {
+      title: "地形模型",
+      label: "領地の石膏模型（測量図と同じ内容を立体で示す）",
+      note: "測量図を写して作った模型。普請の進み具合までは作り込まれていない",
+      hint: "ドラッグで回す・傾ける、ホイールで寄る",
+      surveying: "模型をこしらえている…",
+      unavailable: "地形が測れなかったので、模型は作れなかった",
+      lowPower: "描くのが重いので、模型には布を掛けてある（測量図を見てほしい）",
+      reset: "向きを戻す",
     },
     /** AI 診断（デバッグ画面。?debug で開く） */
     debug: {
@@ -594,6 +639,7 @@ export const messages = {
       objects: {
         lamp: "ランプ",
         ledger: "台帳",
+        relief: "地形模型",
         map: "測量図",
         letters: "側近の書簡",
         newspaper: "新聞",
@@ -605,7 +651,7 @@ export const messages = {
       inHand: (name: string) => `${name}（手元）`,
       stageLabel: "執務机",
       putDownHint: "Esc・右クリック・机の空いた所で置く",
-      keysHint: "1 地図　2 新聞　3 書簡　4 勅令用紙　5 台帳　6 結果束　Tab 並べ読み",
+      keysHint: "1 地図　2 新聞　3 書簡　4 勅令用紙　5 台帳　6 結果束　8 模型　Tab 並べ読み",
     },
     settings: {
       open: "設定",
@@ -704,6 +750,35 @@ export const messages = {
     "あなたは.{0,10}(AI|アシスタント|モデル)",
     "JSON(を|で)?(出力|返)",
   ] as const,
+
+  /**
+   * 地名の部品（SPEC_v3.4 §6.5、DECISIONS BB-12）。地名は saveId だけから組み立てる（ui/map/terrain/Toponyms.ts）。
+   * 小字（districts）は新聞の {place} にも使う（不変条件20）。
+   */
+  toponyms: {
+    /** 地名の頭（1字） */
+    heads: [
+      "鶴", "亀", "松", "杉", "桜", "梅", "椿", "柳", "葦", "萩", "栗", "楢", "檜", "白", "赤", "黒", "青", "大", "小", "長",
+      "高", "深", "浅", "石", "岩", "鷹", "鹿", "熊", "狐", "鷺", "霧", "雲", "月", "星", "朝", "夕", "稲", "麦", "粟", "藤",
+    ] as const,
+    /** 地名の芯（1字） */
+    roots: ["野", "原", "沢", "田", "瀬", "岡", "森", "谷", "島", "浦", "里", "平", "倉", "木", "根", "尾"] as const,
+    suffix: {
+      region: "郷",
+      river: "川",
+      mountain: ["山", "岳"],
+      hill: "ヶ丘",
+      lake: ["池", "沼"],
+      wetland: "谷地",
+      pass: "峠",
+      destination: "宿",
+    },
+    /** 小字（村域の区画名）の頭と尾 */
+    districtHeads: ["上", "下", "中", "北", "南", "東", "西", "本", "新", "古", "川", "石", "松", "柳"] as const,
+    districtTails: ["町", "原", "田", "坂", "谷", "島", "畑", "端", "宮"] as const,
+    /** 街道の先の注記 */
+    direction: (place: string) => `${place}方面`,
+  },
 } as const;
 
 export type Messages = typeof messages;
